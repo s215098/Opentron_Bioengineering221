@@ -157,10 +157,10 @@ REACTION_MIX_FLOW_SCALE = 0.5          # NNBT is in acetonitrile and drips at fu
 # Pipetting speed. The defaults (7.6 / 94 uL/s) make mixing crawl; these are your
 # SC-08 values. Blow-out stays at each pipette's own default - a fast blow-out into a
 # shallow well spatters and foams protein.
-P20_FLOW_UL_S = 15.0                   # default 7.6, hardware max 24
-P300_FLOW_UL_S = 150.0                 # default 94, hardware max 275
-P20_BLOWOUT_UL_S = 7.6                 # p20 default: gentle
-P300_BLOWOUT_UL_S = 94.0               # p300 default: gentle for this pipette
+P20_FLOW_UL_S = 20.0                   # default 7.6, hardware max 24
+P300_FLOW_UL_S = 200.0                 # default 94, hardware max 275
+P20_BLOWOUT_UL_S = 10                 # p20 default: gentle
+P300_BLOWOUT_UL_S = 110.0               # p300 default: gentle for this pipette
 MALDI_FLOW_UL_S = 7.6                  # spotting only. A 1 uL droplet placed onto a
                                        # flat steel target at 15 uL/s splashes.
 
@@ -236,7 +236,7 @@ REAGENT_HEIGHT_MM = 13.0 + EXTRA_HEIGHT_MM   # reagents dropped onto liquid
 SPIKE_HEIGHT_MM = 1.0 + EXTRA_HEIGHT_MM      # spikes into empty wells
 DILUTION_HEIGHT_MM = 0.5               # dispensing into a dilution well
 # --- computed depths: for reaching INTO liquid ---------------------------------------
-MIX_REPS = 8
+MIX_REPS = 3
 MIX_STROKE_FRACTION = 0.4              # of the well volume
 MIX_MIN_HEIGHT_MM = 1.0                # a p300 tip SEALS on a flat floor below ~0.8 mm
 MIX_DEPTH_FRACTION = 0.5               # of the liquid left at the stroke's bottom
