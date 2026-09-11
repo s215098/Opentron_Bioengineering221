@@ -154,6 +154,15 @@ DEVELOP_TEMP_C = 40
 DEVELOP_RPM = 1000                     # not 3000: parafilm off, wells brim-full
 DEVELOP_MIN = 10
 REACTION_MIX_FLOW_SCALE = 0.5          # NNBT is in acetonitrile and drips at full speed
+# Pipetting speed. The defaults (7.6 / 94 uL/s) make mixing crawl; these are your
+# SC-08 values. Blow-out stays at each pipette's own default - a fast blow-out into a
+# shallow well spatters and foams protein.
+P20_FLOW_UL_S = 15.0                   # default 7.6, hardware max 24
+P300_FLOW_UL_S = 150.0                 # default 94, hardware max 275
+P20_BLOWOUT_UL_S = 7.6                 # p20 default: gentle
+P300_BLOWOUT_UL_S = 94.0               # p300 default: gentle for this pipette
+MALDI_FLOW_UL_S = 7.6                  # spotting only. A 1 uL droplet placed onto a
+                                       # flat steel target at 15 uL/s splashes.
 
 # MALDI: 5 uL sample + 20 uL milliQ = 1:5, made in a fresh plate, one spot per condition.
 MALDI_SAMPLE_UL = 5.0
@@ -480,6 +489,42 @@ check_deck()
 check_mix_geometry()
 
 
+# Colours for the Opentrons app's labware map. The app shows a coloured, named liquid
+# in every tube, reservoir well and plate well, so the setup screen doubles as the
+# "what goes where" sheet.
+COLOUR = {
+    'enzyme':    '#2f7d5f',            # green  - the enzymes under test
+    'nc1':       '#78706f',            # grey   - buffer only
+    'nc2':       '#3f6d8f',            # blue   - heat-inactivated
+    'nc3':       '#7b4fa0',            # purple - active enzyme, no NNBT
+    'lac':       '#c2621a',            # amber  - lactaldehyde standards
+    'abts_std':  '#1b7f8f',            # teal   - ABTS protein standards
+    'nnbt':      '#8e24aa',            # violet - NNBT reaction mix
+    'gua':       '#b8860b',            # gold   - guaiacol reaction mix
+    'no_nnbt':   '#c2185b',            # pink   - reaction mix without NNBT
+    'buffer':    '#0288d1',            # cyan   - assay buffer
+    'purpald':   '#c62828',            # red    - Purpald
+    'abts_mix':  '#00695c',            # dark teal
+    'water':     '#90a4ae',            # pale   - milliQ
+    'matrix':    '#5d4037',            # brown  - MALDI matrix
+}
+
+
+def colour_of(name):
+    """Pick a colour from a group/dilution label."""
+    if name.startswith('NC1'):
+        return COLOUR['nc1']
+    if name.startswith('NC2'):
+        return COLOUR['nc2']
+    if name.startswith('NC3'):
+        return COLOUR['nc3']
+    if name.startswith('Lac-std'):
+        return COLOUR['lac']
+    if name.startswith('ABTS-std'):
+        return COLOUR['abts_std']
+    return COLOUR['enzyme']
+
+
 # =======================================================================================
 # SECTION 5 - REPORTING   (run log and `python3 <this file>`)
 # =======================================================================================
@@ -581,6 +626,7 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
 def run(protocol):
     prm = protocol.params
     n = prm.n_enz
+    rounds = int(INCUBATION_MIN // prm.maldi_interval) + 1 if prm.maldi_on else 0
 
     # ---- the batch, straight from the app ------------------------------------------
     batch = [{'name': ENZYME_NAMES[i], 'mg_ml': getattr(prm, f'mg_ml_{i + 1}'),
@@ -612,7 +658,64 @@ def run(protocol):
     p300 = protocol.load_instrument('p300_multi_gen2', 'left', tip_racks=[tr300])
     p20.configure_nozzle_layout(style=SINGLE, start='H1', tip_racks=[tr20])
     p300.configure_nozzle_layout(style=SINGLE, start='H1', tip_racks=[tr300])
+    p20.flow_rate.aspirate = p20.flow_rate.dispense = P20_FLOW_UL_S    # how fast liquid
+    p300.flow_rate.aspirate = p300.flow_rate.dispense = P300_FLOW_UL_S # moves in/out
+    p20.flow_rate.blow_out = P20_BLOWOUT_UL_S       # kept gentle on purpose
+    p300.flow_rate.blow_out = P300_BLOWOUT_UL_S
     hs.close_labware_latch()
+
+    # ---- LIQUID MAP -----------------------------------------------------------------
+    # define_liquid + load_liquid makes the app draw a coloured, named liquid in every
+    # tube, reservoir well and plate well. The setup screen then tells you exactly what
+    # to put where, and how much, without reading this file.
+    liq = {}                                       # name -> Liquid, defined once
+
+    def liquid(name, colour, note=''):
+        if name not in liq:
+            liq[name] = protocol.define_liquid(name, note or name, colour)
+        return liq[name]
+
+    # tubes: this is the "what goes in each tube" answer
+    tube_needs = {}
+    for d in layout['dilutions']:
+        if d['src_kind'] == 'tube':
+            vol, names = tube_needs.get(d['src'], (0.0, []))
+            tube_needs[d['src']] = (vol + (d['stock_vol'] or 40.0), names + [d['name']])
+    for tube, (vol, names) in tube_needs.items():
+        label = ' + '.join(dict.fromkeys(names))
+        tuberack[tube].load_liquid(liquid(label, colour_of(names[0])), vol + 300)
+
+    # reservoir: every reagent, with the volume to pour
+    res_liquids = [(RES_BUFFER, 'Assay buffer', 'buffer', layout['buffer_total'])]
+    for key, total in layout['per_mix'].items():
+        tag = 'nnbt' if key == MIX_NNBT else 'gua' if key == MIX_GUA else 'no_nnbt'
+        for w, v in spread(total, MIX_RESERVOIR[key], MIX_LABEL[key]).items():
+            res_liquids.append((w, MIX_LABEL[key].capitalize(), tag, v))
+    for w, v in spread(layout['purpald_total'], RES_PURPALD, 'Purpald').items():
+        res_liquids.append((w, 'Purpald reagent', 'purpald', v))
+    for w, v in spread(layout['abts_total'], RES_ABTS, 'ABTS mix').items():
+        res_liquids.append((w, 'ABTS reaction mix', 'abts_mix', v))
+    if prm.maldi_on:
+        spots = 2 * (3 + n) * rounds
+        res_liquids.append((RES_WATER, 'milliQ (MALDI 1:5)', 'water',
+                            MALDI_WATER_UL * spots))
+        res_liquids.append((RES_MATRIX, 'MALDI matrix', 'matrix',
+                            MALDI_MATRIX_UL * spots))
+    for well, name, tag, vol in res_liquids:
+        reservoir[well].load_liquid(liquid(name, COLOUR[tag]), vol + RES_DEAD_UL)
+
+    # plates: start empty, so volume 0 - the colour and name are the point
+    for d in layout['dilutions']:
+        dil_plate[d['well']].load_liquid(liquid(d['name'], colour_of(d['name'])), 0)
+    for g in layout['nnbt']:
+        tag = ' + guaiacol' if g['arm'] == ARM_GUA else ''
+        for w in g['wells']:
+            nnbt_plate[w].load_liquid(
+                liquid(g['label'] + tag, colour_of(g['label'])), 0)
+    for g in layout['abts']:
+        for w in g['wells']:
+            abts_plate[w].load_liquid(
+                liquid('ABTS: ' + g['label'], colour_of(g['label'])), 0)
 
     # ---- tips: one running index per rack, so single and column picks never collide --
     racks = {'20': tr20.wells(), '300': tr300.wells()}
@@ -629,6 +732,20 @@ def run(protocol):
         nxt[key] += count
         pip.pick_up_tip(well)
 
+    def step(title):
+        """Announce a phase. These lines are what you watch in the app."""
+        protocol.comment('')
+        protocol.comment('=' * 60)
+        protocol.comment(f'>>> {title}')
+        protocol.comment('=' * 60)
+
+    def slow():
+        """Gentle p20, for placing 1 uL droplets on the MALDI target."""
+        p20.flow_rate.aspirate = p20.flow_rate.dispense = MALDI_FLOW_UL_S
+
+    def fast():
+        p20.flow_rate.aspirate = p20.flow_rate.dispense = P20_FLOW_UL_S
+
     def pick20():
         take('20', p20, SLOT_TIPRACK_20)
 
@@ -641,7 +758,6 @@ def run(protocol):
         take('300', p300, SLOT_TIPRACK_300, WELLS_PER_COLUMN)
 
     # ---- tip budget: warn BEFORE the run rather than stalling mid-incubation --------
-    rounds = int(INCUBATION_MIN // prm.maldi_interval) + 1 if prm.maldi_on else 0
     per_arm = 3 + n                                   # 3 NCs + the enzymes
     maldi_tips = rounds * 2 * (per_arm + math.ceil(per_arm / MALDI_MATRIX_BATCH))
     tips20 = (len(layout['dilutions']) + len(layout['nnbt']) + len(layout['abts'])
@@ -764,7 +880,7 @@ def run(protocol):
     # ===================================================================================
     # 1  buffer into every dilution well - empty wells, so one tip per pipette serves
     # ===================================================================================
-    protocol.comment('1  buffer into the dilution wells')
+    step('STEP 1/9  Dispensing buffer into the dilution wells')
     tipped = set()
     for d in layout['dilutions']:
         if d['buffer_vol'] <= 0:
@@ -781,18 +897,26 @@ def run(protocol):
     # ===================================================================================
     # 2/3/4  stocks in and mixed; lactaldehyde curve; ABTS standards off the rack
     # ===================================================================================
-    protocol.comment('2  enzyme / NC3 / heat-inactivated stocks, then mix')
+    announced = set()
     for d in layout['dilutions']:
         if d['stock_vol'] <= 0:                        # ABTS standards, handled below
             continue
+        phase = ('STEP 3/9  Creating the lactaldehyde concentration gradient'
+                 if d['name'].startswith('Lac-std')
+                 else 'STEP 2/9  Diluting enzymes to a common molar concentration')
+        if phase not in announced:                     # banner when the phase changes
+            step(phase)
+            announced.add(phase)
         src = (tuberack[d['src']] if d['src_kind'] == 'tube'
                else draw_at(dil_plate[d['src']], DILUTION_WELL_VOL_UL, d['stock_vol']))
-        protocol.comment(f'    {d["name"]}: {d["stock_vol"]:.1f} uL + '
-                         f'{d["buffer_vol"]:.1f} uL buffer -> {d["well"]}')
+        protocol.comment(
+            f'  mixing {d["name"]}: {d["stock_vol"]:.1f} uL from '
+            f'{"tube " + d["src"] if d["src_kind"] == "tube" else "well " + d["src"]}'
+            f' + {d["buffer_vol"]:.1f} uL buffer -> dilution well {d["well"]}')
         transfer(d['stock_vol'], src, dil_well(d['well']),
                  mix_well=dil_plate[d['well']])
 
-    protocol.comment('4  ABTS standards off the rack, before it leaves the deck')
+    step('STEP 4/9  Transferring the pre-made ABTS standards off the tube rack')
     for d in layout['abts_dils']:
         transfer(SPIKE_VOL_UL * REPLICATES + 10.0, tuberack[d['src']],
                  dil_well(d['well']))
@@ -801,7 +925,7 @@ def run(protocol):
     # ===================================================================================
     # 5  spikes into the NNBT plate - all four blocks
     # ===================================================================================
-    protocol.comment('5  spikes into the NNBT plate')
+    step('STEP 5/9  Spiking the NNBT plate - controls, standards, enzymes, both arms')
     taken = {}
     spike(layout['nnbt'], nnbt_plate, taken)
 
@@ -810,7 +934,7 @@ def run(protocol):
     # ===================================================================================
     protocol.move_labware(tuberack, protocol_api.OFF_DECK, use_gripper=False)
     protocol.move_labware(abts_plate, SLOT_SWAP, use_gripper=False)
-    protocol.comment('7  spikes into the ABTS plate')
+    step('STEP 7/9  Spiking the ABTS plate')
     spike(layout['abts'], abts_plate, taken)
 
     # ===================================================================================
@@ -819,7 +943,7 @@ def run(protocol):
     #      neighbours and an 8-channel add cannot tell rows apart
     #      enzyme blocks 8-channel by column - all one mix
     # ===================================================================================
-    protocol.comment('8  reaction mixes')
+    step('STEP 8/9  Transferring reaction mixes into the NNBT plate')
     res_of = {}                                        # which reservoir well per mix
     for key, total in layout['per_mix'].items():
         res_of[key] = list(spread(total, MIX_RESERVOIR[key], MIX_LABEL[key]))[0]
@@ -843,7 +967,7 @@ def run(protocol):
             p300.dispense(REACTION_MIX_VOL_UL, nnbt_plate[w].bottom(z=REAGENT_HEIGHT_MM))
             p300.touch_tip()
         p300.drop_tip()
-        protocol.comment(f'    {MIX_LABEL[key]} -> {len(wells)} control wells')
+        protocol.comment(f'  transferred {MIX_LABEL[key]} into {len(wells)} control wells')
 
     p300.configure_nozzle_layout(style=ALL, tip_racks=[tr300])   # back to 8-channel
     p300.flow_rate.aspirate, p300.flow_rate.dispense = slow_a, slow_d
@@ -863,7 +987,7 @@ def run(protocol):
     # ===================================================================================
     # 9  ABTS mix - LAST liquid step: ABTS is kinetic and starts on contact
     # ===================================================================================
-    protocol.comment('9  ABTS mix (kinetic - plate goes to the reader next)')
+    step('STEP 9/9  Transferring ABTS mix - KINETIC, the plate goes to the reader next')
     abts_res = list(spread(layout['abts_total'], RES_ABTS, 'ABTS mix'))
     pick300_column()
     for i, c in enumerate(range(1, layout['abts_columns'] + 1)):
@@ -920,12 +1044,14 @@ def run(protocol):
                 hs.set_and_wait_for_shake_speed(INCUBATION_RPM)
                 protocol.delay(minutes=prm.maldi_interval)
                 hs.deactivate_shaker()                 # never pipette a moving plate
+            step(f'MALDI round {r + 1}/{rounds}  -  t = {r * prm.maldi_interval} min')
             protocol.pause(f'MALDI round {r + 1}/{rounds} (t = {r * prm.maldi_interval} '
                            'min): UNSEAL the NNBT plate, then resume.')
             for arm_i, arm in enumerate((plain, gua)):
                 row = MALDI_ROWS[start_row + 2 * r + arm_i]
-                protocol.comment(f'  MALDI row {row}: '
-                                 f'{"plain" if arm_i == 0 else "guaiacol"}')
+                protocol.comment(f'  spotting row {row}: '
+                                 f'{"plain arm" if arm_i == 0 else "guaiacol arm"} '
+                                 f'- 1 uL matrix, then 1 uL of each 1:5 sample')
                 # NO blow-out, NO touch-tip, NO air gap on the target anywhere below:
                 # air pushed through a 1 uL droplet sprays it onto neighbouring spots
                 # and leaves a bubble, which is a hole in the crystal layer.
@@ -934,11 +1060,13 @@ def run(protocol):
                     # matrix pass: ONE tip, and it never touches a sample - otherwise
                     # it would carry sample back into the shared matrix well.
                     pick20()
+                    slow()                            # droplet work: gentle or it splashes
                     for j in range(len(batch)):
                         spot = maldi_target[f'{row}{first + j + 1}']
                         p20.aspirate(MALDI_MATRIX_UL, reservoir[RES_MATRIX])
                         p20.dispense(MALDI_MATRIX_UL,
                                      spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
+                    fast()
                     p20.drop_tip()
                     protocol.comment(f'    matrix on {len(batch)} spots '
                                      f'({row}{first + 1}..{row}{first + len(batch)})')
@@ -955,12 +1083,14 @@ def run(protocol):
                         p20.dispense(MALDI_SAMPLE_UL, well.bottom(z=DILUTION_HEIGHT_MM))
                         p20.mix(5, 10.0,
                                 mix_at(well, MALDI_WATER_UL + MALDI_SAMPLE_UL, 10.0))
+                        slow()                        # from here the tip is on steel
                         p20.aspirate(MALDI_SPOT_UL + 1.0,         # surplus stays in tip
                                      mix_at(well, MALDI_WATER_UL + MALDI_SAMPLE_UL, 2.0))
                         p20.dispense(MALDI_SPOT_UL,
                                      spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
                         p20.mix(MALDI_MIX_REPS, MALDI_MIX_UL,     # mix in place, 2 uL
                                 spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
+                        fast()
                         p20.drop_tip()
                         protocol.comment(f'    {label} -> {row}{col}')
             protocol.pause('RESEAL the NNBT plate, then resume.')
@@ -976,7 +1106,7 @@ def run(protocol):
     # 12  Purpald, develop, hand off
     # ===================================================================================
     protocol.pause('Remove the seal from the NNBT plate, then resume for Purpald.')
-    protocol.comment('12  Purpald')
+    step('Adding Purpald and developing')
     pur = list(spread(layout['purpald_total'], RES_PURPALD, 'Purpald'))[0]
     pick300_column()
     for c in range(1, layout['nnbt_columns'] + 1):
