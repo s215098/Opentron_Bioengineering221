@@ -19,6 +19,14 @@ NNBT PLATE - 32 triplicate groups, 8 per 3-column block
 WELL RECIPE   10 uL spike + 140 uL reaction mix = 150 uL, 2 h @ 40 C,
               + 50 uL Purpald = 200 uL (the plate's full capacity)
 
+MULTI-DISPENSE   wherever one reagent goes to several wells in a row, ONE aspirate
+serves several of them, with a touch-tip after every dispense: spikes 2 wells per
+p20 load, reaction mix 2 wells per p300 load, Purpald 5 columns per load. Each p300
+load carries a 20 uL disposal volume that is blown into the trash - build_layout()
+has already added that to the volumes it asks you to pour. TWO PLACES DO NOT DO THIS:
+the ABTS mix, because 2 x 190 uL will not fit a p300, and everything on the MALDI
+target, where a touch-tip is forbidden (see the spotting section).
+
 SLOT 5 IS USED THREE TIMES   tube rack -> ABTS plate -> MALDI target. They are never
 needed at once. It is the middle deck column, so BOTH pipettes can reach every well of
 everything that lands there - see rule 3 below.
@@ -245,6 +253,10 @@ P300_MIN, P300_MAX = 20.0, 300.0
 EXTRA_HEIGHT_MM = 2.0                  # padding for the residual real-vs-modelled Z gap
 REAGENT_HEIGHT_MM = 13.0 + EXTRA_HEIGHT_MM   # reagents dropped onto liquid
 SPIKE_HEIGHT_MM = 1.0 + EXTRA_HEIGHT_MM      # spikes into empty wells
+SPIKE_LOW_HEIGHT_MM = 1.5              # a multi-dispensed spike gets NO blow-out (the
+                                       # tip still holds the next well's 10 uL), so it
+                                       # is placed low enough for the droplet to meet
+                                       # the floor and be shed by the touch-tip
 DILUTION_HEIGHT_MM = 0.5               # dispensing into a dilution well
 # --- computed depths: for reaching INTO liquid ---------------------------------------
 MIX_REPS = 3
@@ -259,6 +271,13 @@ BLOW_OUT = True                        # clears the INSIDE of the tip
 TOUCH_TIP = True                       # sheds the drop on the OUTSIDE
 TOUCH_RADIUS = 0.8                     # fraction of well radius
 TOUCH_V_OFFSET_MM = -1.5               # below the well top
+# --- multi-dispense ------------------------------------------------------------------
+# One aspirate serves several wells, with a touch-tip after every dispense. The default
+# disposal volume is the pipette's own minimum (the Opentrons distribute() default): it
+# rides on top of the load and is blown into the trash, so the last well out of the tip
+# is as accurate as the first. build_layout() adds that waste to the reservoir totals.
+# The 10 uL spikes are the exception - 2 x 10 already fills the p20 to its 20 uL brim,
+# so they run with no disposal volume at all.
 
 
 # =======================================================================================
@@ -418,13 +437,30 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     # only the wells actually used. Blocks 3-4 are 8-channel, so a part-filled column
     # still costs a full column.
     per_mix = {}
+    ctrl_wells = {}
     for g in nnbt[:16]:                                   # the two control blocks
         per_mix[g['mix']] = per_mix.get(g['mix'], 0.0) + REACTION_MIX_VOL_UL * REPLICATES
+        ctrl_wells[g['mix']] = ctrl_wells.get(g['mix'], 0) + REPLICATES
     enz_cols = BLOCK_COLS if n else 0
     per_mix[MIX_NNBT] = per_mix.get(MIX_NNBT, 0.0) + \
         REACTION_MIX_VOL_UL * WELLS_PER_COLUMN * enz_cols
     per_mix[MIX_GUA] = per_mix.get(MIX_GUA, 0.0) + \
         REACTION_MIX_VOL_UL * WELLS_PER_COLUMN * enz_cols
+
+    # MULTI-DISPENSE WASTE. Every aspirate carries a disposal volume that is blown into
+    # the trash, so the reservoir has to hold more than the wells actually consume.
+    # Same batching arithmetic as multi_dispense() in run() - keep the two in step.
+    for key, wells_n in ctrl_wells.items():               # one well at a time
+        per_mix[key] += P300_MIN * p300_loads(wells_n, REACTION_MIX_VOL_UL)
+    if enz_cols:                                          # 8-channel: waste x 8 rows
+        for key in (MIX_NNBT, MIX_GUA):
+            per_mix[key] += (P300_MIN * p300_loads(enz_cols, REACTION_MIX_VOL_UL)
+                             * WELLS_PER_COLUMN)
+
+    nnbt_columns = 2 * BLOCK_COLS + (2 * BLOCK_COLS if n else 0)
+    purpald_total = (PURPALD_VOL_UL * WELLS_PER_COLUMN * nnbt_columns
+                     + P300_MIN * p300_loads(nnbt_columns, PURPALD_VOL_UL)
+                     * WELLS_PER_COLUMN)
 
     buffer_total = (sum(d['buffer_vol'] for d in dilutions)
                     + SPIKE_VOL_UL * REPLICATES * 2      # NC1 on both NNBT arms
@@ -434,13 +470,20 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
         'enz_dils': enz_dils, 'nc3_dil': nc3_dil, 'heat_dil': heat_dil,
         'lac_dils': lac_dils, 'abts_dils': abts_dils,
         'nnbt': nnbt, 'abts': abts,
-        'nnbt_columns': 2 * BLOCK_COLS + (2 * BLOCK_COLS if n else 0),
+        'nnbt_columns': nnbt_columns,
         'abts_columns': abts_columns,
         'per_mix': per_mix, 'buffer_total': buffer_total,
-        'purpald_total': PURPALD_VOL_UL * WELLS_PER_COLUMN *
-                         (2 * BLOCK_COLS + (2 * BLOCK_COLS if n else 0)),
+        'purpald_total': purpald_total,
         'abts_total': ABTS_MIX_VOL_UL * WELLS_PER_COLUMN * abts_columns,
     }
+
+
+def p300_loads(n_dests, vol, disposal=P300_MIN):
+    """How many p300 aspirates multi_dispense() needs for n_dests wells of `vol`."""
+    if not n_dests:
+        return 0
+    per_load = max(1, int((P300_MAX - disposal) // vol))
+    return math.ceil(n_dests / per_load)
 
 
 def spread(total_ul, wells, reagent):
@@ -853,30 +896,76 @@ def run(protocol):
         if new_tip and not keep:
             pip.drop_tip()
 
+    def multi_dispense(pip, vol, src, dests, height=REAGENT_HEIGHT_MM,
+                       touch_height=None, disposal=None, touch_src=False):
+        """MULTI-DISPENSE: one aspirate serves several wells, touch-tip after each.
+
+        src         a well/location, or a callable given the load volume and returning
+                    one (a dilution well whose surface is falling as we draw from it)
+        disposal    uL drawn on top of the load and blown into the TRASH at the end of
+                    each load, so the last well out of the tip is as accurate as the
+                    first. Defaults to the pipette's own minimum - the Opentrons
+                    distribute() default. Never returned to the reservoir: the tip has
+                    touched destination wells by then.
+        disposal=0  exact load, nothing to spare. The LAST dispense of each load then
+                    gets the blow-out (there is nothing left behind to push out); the
+                    others are placed at `touch_height` and shed by the touch-tip alone.
+        """
+        cap = P20_MAX if pip is p20 else P300_MAX
+        disposal = (P20_MIN if pip is p20 else P300_MIN) if disposal is None else disposal
+        touch_height = height if touch_height is None else touch_height
+        per_load = max(1, int((cap - disposal + 1e-9) // vol))
+        i = 0
+        while i < len(dests):
+            batch = dests[i:i + per_load]
+            load = vol * len(batch) + disposal
+            where = src(load) if callable(src) else src
+            pip.aspirate(load, where)
+            if touch_src:
+                touch(pip, where)                  # drop falls back into the source
+            for k, d in enumerate(batch):
+                last = (k == len(batch) - 1)
+                if disposal == 0 and last:
+                    pip.dispense(vol, d.bottom(z=height))
+                    clear(pip, d)                  # tip is empty: blow out, then touch
+                else:
+                    pip.dispense(vol, d.bottom(z=touch_height))
+                    touch(pip, d)
+            if disposal:
+                pip.blow_out(protocol.fixed_trash['A1'])
+            i += len(batch)
+
     def dil_well(name):
         return dil_plate[name].bottom(z=DILUTION_HEIGHT_MM)
 
-    def source_of(spec, left):
-        """Where a 10 uL spike comes from: a bottomless reservoir, or a dilution well
-        whose surface we follow down."""
+    def source_of(spec, left, stroke=SPIKE_VOL_UL):
+        """Where a spike load comes from: a bottomless reservoir, or a dilution well
+        whose surface we follow down. `stroke` is the whole aspirate, which under
+        multi-dispense is more than one well's worth."""
         kind, addr = spec
         if kind == 'res':
             return reservoir[addr]
-        return draw_at(dil_plate[addr], left, SPIKE_VOL_UL)
+        return draw_at(dil_plate[addr], left, stroke)
 
     def spike(groups, plate, taken):
-        """SPIKE_VOL_UL into each replicate well, one fresh aspirate each, one tip per
-        group. `taken` = how much has already been drawn from each dilution well."""
+        """SPIKE_VOL_UL into each replicate well, MULTI-DISPENSED, one tip per group.
+        The p20 tops out at 20 uL, so one aspirate serves TWO wells and the third is
+        its own stroke - 2 aspirates per triplicate instead of 3. No disposal volume
+        fits in 2 x 10, so the second well of each pair takes the blow-out and the
+        first is placed low and shed by its touch-tip.
+        `taken` = how much has already been drawn from each dilution well."""
         for g in groups:
             pick20()
-            left = DILUTION_WELL_VOL_UL - taken.get(g['src'][1], 0.0)
-            for w in g['wells']:
-                p20.aspirate(SPIKE_VOL_UL, source_of(g['src'], left))
-                touch(p20, dil_plate[g['src'][1]] if g['src'][0] == 'dil'
-                      else reservoir[g['src'][1]])
-                p20.dispense(SPIKE_VOL_UL, plate[w].bottom(z=SPIKE_HEIGHT_MM))
-                clear(p20, plate[w])                   # 10 uL will not fall on its own
-                left -= SPIKE_VOL_UL
+            state = {'left': DILUTION_WELL_VOL_UL - taken.get(g['src'][1], 0.0)}
+
+            def src(load, g=g, state=state):
+                where = source_of(g['src'], state['left'], load)
+                state['left'] -= load
+                return where
+
+            multi_dispense(p20, SPIKE_VOL_UL, src, [plate[w] for w in g['wells']],
+                           height=SPIKE_HEIGHT_MM, touch_height=SPIKE_LOW_HEIGHT_MM,
+                           disposal=0.0, touch_src=True)
             if g['src'][0] == 'dil':
                 taken[g['src'][1]] = taken.get(g['src'][1], 0.0) + SPIKE_VOL_UL * REPLICATES
             p20.drop_tip()
@@ -949,10 +1038,8 @@ def run(protocol):
         if not wells:
             continue
         pick300()                                      # fresh tip for this mix
-        for w in wells:
-            p300.aspirate(REACTION_MIX_VOL_UL, reservoir[res_of[key]])
-            p300.dispense(REACTION_MIX_VOL_UL, nnbt_plate[w].bottom(z=REAGENT_HEIGHT_MM))
-            p300.touch_tip()
+        multi_dispense(p300, REACTION_MIX_VOL_UL, reservoir[res_of[key]],
+                       [nnbt_plate[w] for w in wells])   # 2 wells per 300 uL aspirate
         p300.drop_tip()
 
     p300.configure_nozzle_layout(style=ALL, tip_racks=[tr300])   # back to 8-channel
@@ -960,11 +1047,10 @@ def run(protocol):
     if n:                                              # enzyme blocks, whole columns
         for block, key in ((2, MIX_NNBT), (3, MIX_GUA)):
             pick300_column()                           # fresh column of tips per mix
-            for c in range(block * BLOCK_COLS + 1, block * BLOCK_COLS + 1 + BLOCK_COLS):
-                p300.aspirate(REACTION_MIX_VOL_UL, reservoir[res_of[key]])
-                p300.dispense(REACTION_MIX_VOL_UL,
-                              nnbt_plate[f'A{c}'].bottom(z=REAGENT_HEIGHT_MM))
-                p300.touch_tip()
+            multi_dispense(p300, REACTION_MIX_VOL_UL, reservoir[res_of[key]],
+                           [nnbt_plate[f'A{c}'] for c in
+                            range(block * BLOCK_COLS + 1,
+                                  block * BLOCK_COLS + 1 + BLOCK_COLS)])
             p300.drop_tip()
     p300.flow_rate.aspirate, p300.flow_rate.dispense = fast_a, fast_d
 
@@ -1084,10 +1170,8 @@ def run(protocol):
     protocol.pause('Remove the seal from the NNBT plate, then resume for Purpald.')
     pur = list(spread(layout['purpald_total'], RES_PURPALD, 'Purpald'))[0]
     pick300_column()
-    for c in range(1, layout['nnbt_columns'] + 1):
-        p300.aspirate(PURPALD_VOL_UL, reservoir[pur])
-        p300.dispense(PURPALD_VOL_UL, nnbt_plate[f'A{c}'].bottom(z=REAGENT_HEIGHT_MM))
-        p300.touch_tip()
+    multi_dispense(p300, PURPALD_VOL_UL, reservoir[pur],          # 5 columns per load
+                   [nnbt_plate[f'A{c}'] for c in range(1, layout['nnbt_columns'] + 1)])
     p300.drop_tip()
 
     hs.set_and_wait_for_temperature(DEVELOP_TEMP_C)
