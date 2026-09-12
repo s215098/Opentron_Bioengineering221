@@ -158,7 +158,7 @@ BLOCK_COLS = REPLICATES                # a 3-column block holds 8 triplicate gro
 
 INCUBATION_TEMP_C = 40                 # inside the module's 37-95 C range
 INCUBATION_RPM = 250
-INCUBATION_MIN = 20 #??? should be 120
+INCUBATION_MIN = 120 #??? should be 120
 DEVELOP_TEMP_C = 40
 DEVELOP_RPM = 1000                     # not 3000: parafilm off, wells brim-full
 DEVELOP_MIN = 10
@@ -637,8 +637,8 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
 def run(protocol):
     prm = protocol.params
     n = prm.n_enz
-    # rounds = int(INCUBATION_MIN // prm.maldi_interval) + 1 if prm.maldi_on else 0
-    rounds = 1
+    rounds = int(INCUBATION_MIN // prm.maldi_interval) + 1 if prm.maldi_on else 0
+    # rounds = 1
 
     # ---- the batch, straight from the app ------------------------------------------
     batch = [{'name': ENZYME_NAMES[i], 'mg_ml': getattr(prm, f'mg_ml_{i + 1}'),
