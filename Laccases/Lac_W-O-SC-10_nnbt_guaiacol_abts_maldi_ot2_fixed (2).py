@@ -8,6 +8,19 @@ PARAMETER in the Opentrons app - you should not need to open this file.
   ABTS plate  (slot 5, swapped in)     activity, read immediately at A414/A734
   MALDI target(slot 5, swapped again)  spotted during the NNBT incubation
 
+ABTS PLATE - there is NO ABTS-radical standard curve. The positive control is PaDa-1
+powder, made up by hand into two tubes and run at two strengths:
+
+       1      2     3     4          col 1   PaDa-1, vertical triplicates, and the
+  A  PaDa    NC1   NC1   NC1                 ONLY column that takes the PaDa mix
+  B  neat    NC2   NC2   NC2         cols 2+ NC1, NC2, then the enzymes from row C,
+  C   |      Enz1  Enz1  Enz1                horizontal triplicates, laccase mix
+  D  PaDa    Enz2  ...                       (enzymes 7-8 spill into cols 5-7)
+  E  1:1000  Enz3
+  F   |      ...up to Enz6
+  G   .       .                      A dot is a well with reaction mix but no sample:
+  H   .       .                      the mix goes in by whole columns (see below).
+
 NNBT PLATE - 32 triplicate groups, 8 per 3-column block
   cols  1-3   NC1, NC2, NC3, 5 lactaldehyde standards        mix: NNBT (NC3: no-NNBT)
   cols  4-6   the same 8, with guaiacol                      mix: guaiacol (NC3: no-NNBT+gua)
@@ -27,6 +40,19 @@ has already added that to the volumes it asks you to pour. TWO PLACES DO NOT DO 
 the ABTS mix, because 2 x 190 uL will not fit a p300, and everything on the MALDI
 target, where a touch-tip is forbidden (see the spotting section).
 
+TWO WAYS TO SPIKE   the NNBT plate is spiked 8-CHANNEL: a dilution column holds eight
+samples in the same row order as the destination block, so one aspirate loads all eight
+nozzles. The ABTS plate cannot do that - its PaDa triplicates run DOWN a column and its
+enzymes start at row C - so every ABTS spike is SINGLE-NOZZLE, one sample at a time.
+That is 4+n tips instead of two whole columns, so it is cheaper, and it is slower only
+before the mix goes in, which is where slowness does not matter.
+
+THE ABTS MIX STILL GOES IN BY WHOLE COLUMNS, 8-channel, because ABTS is kinetic and 36
+single-nozzle dispenses would smear the start times across the plate. A column is all
+one mix or nothing, which is why every PaDa well lives in column 1. The price is that
+the unused wells of a part-filled column get reaction mix with no sample in them. They
+are blank, nobody reads them, and the mix is cheap.
+
 SLOT 5 IS USED THREE TIMES   tube rack -> ABTS plate -> MALDI target. They are never
 needed at once. It is the middle deck column, so BOTH pipettes can reach every well of
 everything that lands there - see rule 3 below.
@@ -35,14 +61,15 @@ RUN ORDER
   1  buffer into the dilution wells
   2  enzyme / NC3 / heat-inactivated stocks in, mixed      -> all at one molar conc
   3  lactaldehyde standard curve built by serial dilution
-  4  ABTS standards moved from tubes into dilution wells   (rack is about to leave)
-  5  10 uL spikes into the NNBT plate, all four blocks
+  4  PaDa-1 neat and 1:1000 moved from tubes into dilution wells  (rack is about to go)
+  5  10 uL spikes into the NNBT plate, all four blocks           - 8-channel
   6  PAUSE - swap the tube rack for the ABTS plate
-  7  10 uL spikes into the ABTS plate
+  7  10 uL spikes into the ABTS plate                            - SINGLE-NOZZLE
   8  reaction mixes into the NNBT plate
        blocks 1-2 one well at a time  (NC3 needs a different mix from its neighbours)
        blocks 3-4 8-channel by column (all one mix)
-  9  ABTS mix - LAST, because ABTS is kinetic and starts on contact
+  9  ABTS mixes - LAST, because ABTS is kinetic and starts on contact.
+       column 1 gets the PaDa mix (H2O2), every other column the laccase mix
  10  PAUSE - ABTS plate to the reader, seal the NNBT plate, MALDI labware in
  11  incubate 2 h @ 40 C, pausing every interval to unseal, spot MALDI, reseal
  12  Purpald, develop, read A530
@@ -154,17 +181,25 @@ LAC_SERIAL = False                     # False: every standard comes straight fr
                                        # DILUTION_WELL_VOL_UL past ~400 uL, which this
                                        # plate cannot hold.
 
-# ABTS protein standards - PRE-MADE BY HAND, one tube each, in this order.
-ABTS_STD_MG_ML = [0.0, 0.125, 0.25, 0.5, 0.75, 1.0]
-ABTS_STD_FILL_UL = 80.0                # These standards are PRE-MADE and transferred,
-                                       # not diluted, so their wells do NOT hold
-                                       # DILUTION_WELL_VOL_UL. 30 uL is spiked out in
-                                       # two p20 loads (20 then 10), and the tip has to
-                                       # stay under the surface for both. 40 left the
-                                       # tip 1.35 mm ABOVE the liquid. 60 clears the
-                                       # last draw by 0.01 mm, which is not clearance.
-                                       # 80 leaves 50 uL and 0.55 mm at the worst point.
-ABTS_STD_TUBES = ['A5', 'B5', 'C5', 'D5', 'A6', 'B6']
+# ABTS POSITIVE CONTROL - PaDa-1 powder, made up BY HAND into two tubes. There is no
+# ABTS-radical standard curve: we have no such standard, so the positive control is a
+# known-active enzyme at two strengths instead of a concentration series.
+PADA_NAMES = ['PaDa-1 neat', 'PaDa-1 1:1000']
+PADA_TUBES = ['A5', 'B5']
+PADA_FILL_UL = 100.0                   # PRE-MADE and transferred, not diluted, so these
+                                       # wells do NOT hold DILUTION_WELL_VOL_UL. 30 uL
+                                       # is spiked out in two p20 loads (20 then 10) and
+                                       # the tip must stay under the surface for both.
+                                       # 40 left the tip 1.35 mm ABOVE the liquid. 60
+                                       # cleared the last draw by 0.01 mm, which is not
+                                       # clearance. 80 gave 0.56 mm, and that is already
+                                       # in the regime where ASPIRATE_MIN_HEIGHT_MM has
+                                       # overridden the half-depth rule. 100 leaves
+                                       # 70 uL and 0.95 mm at the worst point, and 20 uL
+                                       # more of a hand-made solution costs nothing.
+                                       # The NC wells used to need a short fill like this
+                                       # too, for the 8-channel column aspirate. They no
+                                       # longer do - see build_layout().
 
 DILUTION_WELL_VOL_UL = 200.0           # per dilution well. An enzyme well gives up 90 uL
                                        # (NNBT arm A + arm B + ABTS), and a serial lac
@@ -264,7 +299,13 @@ TUBE_LACTALDEHYDE = 'D6'
 RES_NNBT = ['A1', 'A2']                # buffer + NNBT                (2 wells: >13 mL)
 RES_BUFFER = 'A3'                      # dilution buffer + the NC1 spike
 RES_PURPALD = ['A4']
-RES_ABTS = ['A5', 'A6']                # ABTS reaction mix
+RES_ABTS = ['A5']                      # laccase ABTS mix. One well: even at 8 enzymes
+                                       # the plate takes under 6 mL, and A6 is now the
+                                       # PaDa mix.
+RES_PADA = ['A6']                      # PaDa-1 ABTS mix: H2O2 instead of Cu2+, and a
+                                       # different pH. PaDa-1 is a peroxygenase, so it
+                                       # cannot run in the laccase mix. Column 1 of the
+                                       # ABTS plate is the only column it touches.
 RES_GUAIACOL = ['A7', 'A8']            # guaiacol buffer + NNBT + guaiacol
 RES_NO_NNBT = ['A9']                   # NC3: reaction mix WITHOUT NNBT
 RES_NO_NNBT_GUA = ['A10']              # NC3 guaiacol: no NNBT, with guaiacol
@@ -322,6 +363,14 @@ MIX_RESERVOIR = {MIX_NNBT: RES_NNBT, MIX_GUA: RES_GUAIACOL,
 MIX_LABEL = {MIX_NNBT: 'NNBT mix', MIX_GUA: 'guaiacol mix',
              MIX_NO_NNBT: 'no-NNBT mix', MIX_NO_NNBT_GUA: 'no-NNBT guaiacol mix'}
 
+# The ABTS plate's two mixes. A COLUMN TAKES ONE OR THE OTHER, NEVER BOTH - the mix is
+# dispensed 8-channel by column to keep the kinetic start times together, and an
+# 8-channel dispense cannot tell rows apart. Column 1 is therefore the PaDa column.
+MIX_ABTS, MIX_PADA = 'abts', 'pada'
+ABTS_MIX_RESERVOIR = {MIX_ABTS: RES_ABTS, MIX_PADA: RES_PADA}
+ABTS_MIX_LABEL = {MIX_ABTS: 'laccase ABTS mix', MIX_PADA: 'PaDa-1 ABTS mix (H2O2)'}
+PADA_COLUMN = 1                        # the only ABTS column that takes the PaDa mix
+
 
 def _tube(index):
     """Tube-rack well for the index-th enzyme (0-based): 4 rows per column."""
@@ -331,6 +380,18 @@ def _tube(index):
 def _dil(index):
     """Dilution-plate well for the index-th dilution (0-based), column-then-row."""
     return f'{ROW_LETTERS[index % WELLS_PER_COLUMN]}{index // WELLS_PER_COLUMN + 1}'
+
+
+def _abts_row_slots():
+    """(row, first column) of each horizontal triplicate on the ABTS plate, in fill
+    order. Column 1 is the PaDa column, so the rows start at column 2; each block is
+    REPLICATES columns wide and the blocks run left to right without end. The first two
+    slots are the negative controls, which is what puts the enzymes on row C."""
+    col = PADA_COLUMN + 1
+    while True:
+        for row in range(WELLS_PER_COLUMN):
+            yield row, col
+        col += REPLICATES
 
 
 def _block_wells(block, slot):
@@ -378,23 +439,30 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     target = float(target_um) if target_um else (
         min([e['conc'] for e in enz_um] + [heat_um]) * ENZ_TARGET_AUTO_FRACTION)
 
-    # ---- dilution plate: THREE ROW-ALIGNED COLUMNS ----------------------------------
-    # Every destination block is 8 groups, one per ROW, REPLICATES columns wide. So a
-    # column of a block is "one replicate of all 8 samples" - exactly what an 8-channel
-    # dispenses. For the p20 to take a whole column at once, the dilution plate's rows
-    # must sit in the SAME order as the destination block's rows:
-    #
+    # ---- dilution plate -------------------------------------------------------------
     #   col 1  NC1, NC2, NC3, lac x5      -> NNBT control blocks, both arms
+    #                                        AND the ABTS negative controls
     #   col 2  enzymes 1-8                -> NNBT enzyme blocks, and the ABTS enzymes
-    #   col 3  NC1, NC2, ABTS std x6      -> ABTS control block
+    #   col 3  PaDa-1 neat, PaDa-1 1:1000 -> the ABTS positive control only
     #
-    # One aspirate = ONE Z height for all eight nozzles, so every well in a column must
-    # hold the SAME volume and be drawn down on the same schedule. That is why the ABTS
-    # standards get their own column: they are filled to ABTS_STD_FILL_UL, not to
-    # DILUTION_WELL_VOL_UL, and mixing the two in one column would put some nozzles
-    # above the surface.
+    # COLUMNS 1 AND 2 ARE ROW-ALIGNED WITH THE NNBT BLOCKS. Every NNBT block is 8 groups,
+    # one per ROW, REPLICATES columns wide, so a column of a block is "one replicate of
+    # all 8 samples" - exactly what an 8-channel dispenses. One aspirate is ONE Z for all
+    # eight nozzles, so every well in such a column must hold the SAME volume and be
+    # drawn down on the same schedule.
+    #
+    # COLUMN 3 IS NOT, and does not have to be: the ABTS plate is spiked single-nozzle,
+    # so its two wells are free to carry PADA_FILL_UL instead of a full well.
+    #
+    # NC1 and NC2 USED TO BE DUPLICATED HERE at the short fill, purely so the old
+    # 8-channel ABTS pass had a uniform column to aspirate from. Single-nozzle spiking
+    # removed that constraint, so the ABTS negative controls now come straight out of the
+    # 200 uL col-1 wells: 90 uL out of 200 instead of 30 out of 80, which turns the worst
+    # draw's clearance from 0.56 mm into 1.49 mm and saves an aliquot of heat-inactivated
+    # enzyme. It is safe ONLY because no 8-channel pass touches column 1 after the ABTS
+    # spikes have pulled A1 and B1 below their neighbours - see step 7 in run().
     dilutions = []
-    V_MAIN, V_ABTS = DILUTION_WELL_VOL_UL, ABTS_STD_FILL_UL
+    V_MAIN, V_PADA = DILUTION_WELL_VOL_UL, PADA_FILL_UL
 
     def add_dil(well, name, kind, address, stock_conc, fill, note='', conc_to=None):
         """stock_conc None = a buffer-only well (NC1, and the fillers)."""
@@ -440,20 +508,15 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
                        None, V_MAIN, 'filler: keeps the 8th nozzle out of a dry well')
                for i in range(n, WELLS_PER_COLUMN)]
 
-    # --- column 3: the ABTS control block, in ABTS block row order -------------------
-    # NC1 and NC2 appear in both row orders, so they exist twice - once per column.
-    abts_nc1 = add_dil(_w(0, 3), 'NC1 buffer only [ABTS]', 'res', RES_BUFFER, None,
-                       V_ABTS, 'duplicate of A1 at the ABTS fill volume')
-    abts_heat = add_dil(_w(1, 3), 'NC2 heat-inactivated [ABTS]', 'tube',
-                        TUBE_HEAT_INACT, heat_um, V_ABTS,
-                        'duplicate of B1 at the ABTS fill volume')
-    abts_dils = []
-    for row, (conc, tube) in enumerate(zip(ABTS_STD_MG_ML, ABTS_STD_TUBES), start=2):
-        d = {'name': f'ABTS-std {conc:g} mg/mL', 'well': _w(row, 3), 'src_kind': 'tube',
-             'src': tube, 'stock_conc': conc, 'stock_vol': 0.0, 'buffer_vol': 0.0,
-             'fill': V_ABTS, 'note': 'pre-made, transferred not diluted'}
+    # --- column 3: the ABTS positive control -----------------------------------------
+    # Made up by hand as powder in buffer, transferred whole - no dilution on deck.
+    pada_dils = []
+    for row, (name, tube) in enumerate(zip(PADA_NAMES, PADA_TUBES)):
+        d = {'name': name, 'well': _w(row, 3), 'src_kind': 'tube', 'src': tube,
+             'stock_conc': 0.0, 'stock_vol': 0.0, 'buffer_vol': 0.0,
+             'fill': V_PADA, 'note': 'pre-made by hand, transferred not diluted'}
         dilutions.append(d)
-        abts_dils.append(d)
+        pada_dils.append(d)
 
     # ---- NNBT plate: four blocks of eight groups ------------------------------------
     def ctrl_block(block, arm, mix, nomix):
@@ -483,16 +546,30 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
             + enz_block(2, ARM_PLAIN, MIX_NNBT)
             + enz_block(3, ARM_GUA, MIX_GUA))
 
-    # ---- ABTS plate: NC1, NC2, the 6 standards, then the enzymes --------------------
-    abts = [{'label': 'NC1 buffer only', 'src': ('dil', abts_nc1['well'])},
-            {'label': abts_heat['name'], 'src': ('dil', abts_heat['well'])}]
-    abts += [{'label': d['name'], 'src': ('dil', d['well'])} for d in abts_dils]
-    for slot, g in enumerate(abts):
-        g['wells'] = _block_wells(0, slot)
-    for slot, d in enumerate(enz_dils + fillers):
-        abts.append({'label': d['name'], 'src': ('dil', d['well']),
-                     'wells': _block_wells(1, slot)})
+    # ---- ABTS plate -----------------------------------------------------------------
+    # Column 1: the two PaDa-1 strengths as VERTICAL triplicates, so the whole positive
+    # control sits in the one column that takes the H2O2 mix. Everything else is a
+    # HORIZONTAL triplicate from column 2 on: NC1, NC2, then the enzymes from row C.
+    # The fillers are not here - they exist only to keep an 8-channel column aspirate off
+    # a dry well, and no 8-channel pass reads this plate's sources.
+    if 2 * REPLICATES > WELLS_PER_COLUMN:
+        raise ValueError(f'{REPLICATES} replicates x 2 PaDa strengths needs '
+                         f'{2 * REPLICATES} rows, but a column has {WELLS_PER_COLUMN}.')
+    abts = []
+    for i, d in enumerate(pada_dils):
+        row0 = i * REPLICATES
+        abts.append({'label': d['name'], 'src': ('dil', d['well']), 'mix': MIX_PADA,
+                     'wells': [f'{ROW_LETTERS[row0 + k]}{PADA_COLUMN}'
+                               for k in range(REPLICATES)]})
+    slots = _abts_row_slots()
+    for d in [nc1_dil, heat_dil] + enz_dils:
+        row, col = next(slots)
+        abts.append({'label': d['name'], 'src': ('dil', d['well']), 'mix': MIX_ABTS,
+                     'wells': [f'{ROW_LETTERS[row]}{col + k}' for k in range(REPLICATES)]})
     abts_columns = max(int(w[1:]) for g in abts for w in g['wells'])
+    # Which mix each whole column takes. Only column 1 is PaDa; the rest are laccase.
+    abts_col_mix = {c: (MIX_PADA if c == PADA_COLUMN else MIX_ABTS)
+                    for c in range(1, abts_columns + 1)}
 
     # ---- reagent volumes ------------------------------------------------------------
     # Blocks 1-2 are filled one well at a time (NC3 needs its own mix), so they cost
@@ -527,16 +604,22 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     buffer_total = (sum(d['buffer_vol'] for d in dilutions)
                     + SPIKE_VOL_UL * REPLICATES * 2      # NC1 on both NNBT arms
                     + SPIKE_VOL_UL * REPLICATES)         # NC1 on the ABTS plate
+    # The ABTS mixes go in by WHOLE COLUMNS, so a part-filled column still costs eight
+    # wells of mix. That waste is the price of keeping the kinetic starts together.
+    abts_per_mix = {}
+    for key in abts_col_mix.values():
+        abts_per_mix[key] = (abts_per_mix.get(key, 0.0)
+                             + ABTS_MIX_VOL_UL * WELLS_PER_COLUMN)
     return {
         'target': target, 'enzymes': enz_um, 'dilutions': dilutions,
         'enz_dils': enz_dils, 'nc3_dil': nc3_dil, 'heat_dil': heat_dil,
-        'lac_dils': lac_dils, 'abts_dils': abts_dils,
+        'lac_dils': lac_dils, 'pada_dils': pada_dils, 'nc1_dil': nc1_dil,
         'nnbt': nnbt, 'abts': abts,
         'nnbt_columns': nnbt_columns,
-        'abts_columns': abts_columns,
+        'abts_columns': abts_columns, 'abts_col_mix': abts_col_mix,
         'per_mix': per_mix, 'buffer_total': buffer_total,
         'purpald_total': purpald_total,
-        'abts_total': ABTS_MIX_VOL_UL * WELLS_PER_COLUMN * abts_columns,
+        'abts_per_mix': abts_per_mix,
     }
 
 
@@ -614,13 +697,14 @@ COLOUR = {
     'nc2':       '#3f6d8f',            # blue   - heat-inactivated
     'nc3':       '#7b4fa0',            # purple - active enzyme, no NNBT
     'lac':       '#c2621a',            # amber  - lactaldehyde standards
-    'abts_std':  '#1b7f8f',            # teal   - ABTS protein standards
+    'pada':      '#1b7f8f',            # teal   - PaDa-1 positive control
     'nnbt':      '#8e24aa',            # violet - NNBT reaction mix
     'gua':       '#b8860b',            # gold   - guaiacol reaction mix
     'no_nnbt':   '#c2185b',            # pink   - reaction mix without NNBT
     'buffer':    '#0288d1',            # cyan   - assay buffer
     'purpald':   '#c62828',            # red    - Purpald
-    'abts_mix':  '#00695c',            # dark teal
+    'abts_mix':  '#00695c',            # dark teal - laccase ABTS mix
+    'pada_mix':  '#00838f',            # cyan-teal - PaDa-1 ABTS mix (H2O2)
     'water':     '#90a4ae',            # pale   - milliQ
     'matrix':    '#5d4037',            # brown  - MALDI matrix
 }
@@ -636,8 +720,8 @@ def colour_of(name):
         return COLOUR['nc3']
     if name.startswith('Lac-std'):
         return COLOUR['lac']
-    if name.startswith('ABTS-std'):
-        return COLOUR['abts_std']
+    if name.startswith('PaDa'):
+        return COLOUR['pada']
     return COLOUR['enzyme']
 
 
@@ -652,6 +736,7 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
     out = ['=' * 78,
            f'  {n_enz} enzymes x 2 arms (plain + guaiacol), 3 negative controls, '
            f'{len(LAC_GRADIENT_UM)} lactaldehyde standards',
+           '  ABTS positive control: ' + ' and '.join(PADA_NAMES) + ' (no ABTS standard)',
            f'  every enzyme diluted to {layout["target"]:.2f} uM',
            '=' * 78, '']
 
@@ -671,17 +756,32 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
                    f'[{MIX_LABEL[g["mix"]]}]')
 
     # --- ABTS plate map ---
-    out += ['', '-' * 78, f'  ABTS PLATE (slot {SLOT_SWAP}, swapped in after the dilutions)',
-            '   #  wells          content']
+    # Irregular on purpose: the PaDa positive control runs DOWN column 1, everything
+    # else runs ACROSS from column 2. A grid is the only readable way to show that.
+    apos = {w: i + 1 for i, g in enumerate(layout['abts']) for w in g['wells']}
+    cols = layout['abts_columns']
+    out += ['', '-' * 78,
+            f'  ABTS PLATE (slot {SLOT_SWAP}, swapped in after the dilutions)',
+            '  P=PaDa mix (H2O2)  A=laccase ABTS mix  --=mix but NO sample, do not read',
+            '       ' + ''.join(f'{c:>5}' for c in range(1, cols + 1))]
+    for r in ROW_LETTERS:
+        cells = []
+        for c in range(1, cols + 1):
+            sym = 'P' if layout['abts_col_mix'][c] == MIX_PADA else 'A'
+            w = f'{r}{c}'
+            cells.append((f'{sym}{apos[w]:02d}' if w in apos else f'{sym}--').rjust(5))
+        out.append(f'  {r}  ' + ''.join(cells))
+    out += ['', '   #  wells          content']
     for i, g in enumerate(layout['abts']):
-        out.append(f'  {i + 1:02d}  {",".join(g["wells"]):<14} {g["label"]}')
+        out.append(f'  {i + 1:02d}  {",".join(g["wells"]):<14} {g["label"]} '
+                   f'[{ABTS_MIX_LABEL[g["mix"]]}]')
 
     # --- dilution plate ---
     out += ['', '-' * 78,
             f'  DILUTION PLATE (slot 6), {DILUTION_WELL_VOL_UL:g} uL per well',
             '  well  from        stock uL  buffer uL  content']
     for d in layout['dilutions']:
-        origin = ('tube ' if d['src_kind'] == 'tube' else 'dil  ') + d['src']
+        origin = {'tube': 'tube ', 'res': 'res  '}.get(d['src_kind'], 'dil  ') + d['src']
         out.append(f'  {d["well"]:<5} {origin:<11} {d["stock_vol"]:>8.1f} '
                    f'{d["buffer_vol"]:>10.1f}  {d["name"]}'
                    f'{"  [" + d["note"] + "]" if d["note"] else ""}')
@@ -693,8 +793,9 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
             needs[w] = (MIX_LABEL[key], v)
     for w, v in spread(layout['purpald_total'], RES_PURPALD, 'Purpald').items():
         needs[w] = ('Purpald reagent', v)
-    for w, v in spread(layout['abts_total'], RES_ABTS, 'ABTS mix').items():
-        needs[w] = ('ABTS reaction mix', v)
+    for key, total in layout['abts_per_mix'].items():
+        for w, v in spread(total, ABTS_MIX_RESERVOIR[key], ABTS_MIX_LABEL[key]).items():
+            needs[w] = (ABTS_MIX_LABEL[key], v)
     if maldi_on:
         rounds = int(INCUBATION_MIN // interval) + 1
         spots = 2 * (3 + n_enz) * rounds
@@ -713,7 +814,7 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
         if d['src_kind'] != 'tube':
             continue
         vol, names = tubes.get(d['src'], (0.0, []))
-        tubes[d['src']] = (vol + (d['stock_vol'] or ABTS_STD_FILL_UL), names + [d['name']])
+        tubes[d['src']] = (vol + (d['stock_vol'] or d['fill']), names + [d['name']])
     for tube in sorted(tubes, key=lambda t: (int(t[1:]), t[0])):
         vol, names = tubes[tube]
         out.append(f'    {tube:<4} {" + ".join(names):<34} >= {vol + 300:.0f} uL')
@@ -750,8 +851,6 @@ def run(protocol):
               'mw_kda': getattr(prm, f'mw_{i + 1}')} for i in range(n)]
     heat_um = to_um(prm.heat_mg_ml, prm.heat_mw)
     layout = build_layout(batch, heat_um, prm.target_um, prm.nc3_enz - 1)
-    # Which dilution wells hold ABTS_STD_FILL_UL instead of a full DILUTION_WELL_VOL_UL.
-    abts_std_wells = {d['well'] for d in layout['abts_dils']}
 
     for e in layout['enzymes']:                       # the conversion, on the record
         protocol.comment(f'  {e["name"]}: {e["mg_ml"]:g} mg/mL / {e["mw_kda"]:g} kDa '
@@ -799,7 +898,8 @@ def run(protocol):
     for d in layout['dilutions']:
         if d['src_kind'] == 'tube':
             vol, names = tube_needs.get(d['src'], (0.0, []))
-            tube_needs[d['src']] = (vol + (d['stock_vol'] or ABTS_STD_FILL_UL), names + [d['name']])
+            tube_needs[d['src']] = (vol + (d['stock_vol'] or d['fill']),
+                                    names + [d['name']])
     for tube, (vol, names) in tube_needs.items():
         label = ' + '.join(dict.fromkeys(names))
         tuberack[tube].load_liquid(liquid(label, colour_of(names[0])), vol + 300)
@@ -812,8 +912,10 @@ def run(protocol):
             res_liquids.append((w, MIX_LABEL[key].capitalize(), tag, v))
     for w, v in spread(layout['purpald_total'], RES_PURPALD, 'Purpald').items():
         res_liquids.append((w, 'Purpald reagent', 'purpald', v))
-    for w, v in spread(layout['abts_total'], RES_ABTS, 'ABTS mix').items():
-        res_liquids.append((w, 'ABTS reaction mix', 'abts_mix', v))
+    for key, total in layout['abts_per_mix'].items():
+        tag = 'pada_mix' if key == MIX_PADA else 'abts_mix'
+        for w, v in spread(total, ABTS_MIX_RESERVOIR[key], ABTS_MIX_LABEL[key]).items():
+            res_liquids.append((w, ABTS_MIX_LABEL[key].capitalize(), tag, v))
     if prm.maldi_on:
         spots = 2 * (3 + n) * rounds
         res_liquids.append((RES_WATER, 'milliQ (MALDI 1:5)', 'water',
@@ -872,8 +974,9 @@ def run(protocol):
     # ---- tip budget: warn BEFORE the run rather than stalling mid-incubation --------
     per_arm = 3 + n                                   # 3 NCs + the enzymes
     maldi_tips = rounds * 2 * (per_arm + math.ceil(per_arm / MALDI_MATRIX_BATCH))
-    spike_cols = 4 if n else 2            # col 1, col 2 (x2: NNBT then ABTS), col 3
-    tips20 = (len(layout['dilutions']) + spike_cols * WELLS_PER_COLUMN
+    spike_cols = 2 if n else 1            # NNBT only: col 1, and col 2 if there are any
+    abts_tips = len(layout['abts'])       # ABTS is single-nozzle: one tip per sample
+    tips20 = (len(layout['dilutions']) + spike_cols * WELLS_PER_COLUMN + abts_tips
               + maldi_tips + WELLS_PER_COLUMN)   # slack: pick20_column skips part-used
     have20 = len(racks['20']) - start['20']
     protocol.comment(f'  20 uL tips needed ~{tips20}, available from '
@@ -1025,21 +1128,50 @@ def run(protocol):
             nxt['20'] += 1
         take('20', p20, SLOT_TIPRACK_20, WELLS_PER_COLUMN)
 
-    def spike_column(src_col, dest_anchors, plate, state):
+    # HOW MUCH IS LEFT IN EVERY DILUTION WELL, tracked per well rather than per column.
+    # It has to be per well now: the col-1 NC wells and the col-2 enzyme wells are drawn
+    # 8-channel for the NNBT plate and then single-nozzle again for the ABTS plate, so
+    # after the ABTS spikes the wells of a column no longer hold the same volume.
+    # draw_at() reads this to place the tip, and raises rather than aspirate air.
+    remaining = {d['well']: d['fill'] for d in layout['dilutions']}
+    for d in layout['dilutions']:        # serial lac donations, if LAC_SERIAL is on,
+        if d['src_kind'] == 'dil' and d['stock_vol'] > 0:    # left those wells short
+            remaining[d['src']] -= d['stock_vol']
+
+    def spike_column(src_col, dest_anchors, plate):
         """ONE 8-CHANNEL PASS. The dilution column holds eight different samples in
         the same row order as the destination block, so one aspirate loads all eight
         nozzles at once and each load is multi-dispensed across REPLICATES destination
         columns. All eight nozzles share one Z, which is only valid because every well
-        in the column holds the same volume and is drawn down on the same schedule."""
+        in the column holds the same volume and is drawn down on the same schedule -
+        so this may only run BEFORE the single-nozzle ABTS spikes, never after."""
         anchor = dil_plate[f'A{src_col}']
+        col_wells = [w for w in (f'{r}{src_col}' for r in ROW_LETTERS) if w in remaining]
 
-        def src(load, state=state):
-            where = draw_at(anchor, state['left'], load)
-            state['left'] -= load
+        def src(load):
+            where = draw_at(anchor, remaining[f'A{src_col}'], load)
+            for w in col_wells:                  # every nozzle draws the same load
+                remaining[w] -= load
             return where
 
         pick20_column()
         multi_dispense(p20, SPIKE_VOL_UL, src, [plate[a] for a in dest_anchors],
+                       height=SPIKE_HEIGHT_MM, touch_height=SPIKE_LOW_HEIGHT_MM,
+                       disposal=0.0, touch_src=True)
+        p20.drop_tip()
+
+    def spike_single(src_well, dests, plate):
+        """ONE SAMPLE, SINGLE-NOZZLE, into wells that need not share a row or a column.
+        Still multi-dispensed: 2 wells per 20 uL p20 load, so a triplicate costs two
+        aspirates (20 then 10). This is how the whole ABTS plate is spiked."""
+        pick20()
+
+        def src(load):
+            where = draw_at(dil_plate[src_well], remaining[src_well], load)
+            remaining[src_well] -= load
+            return where
+
+        multi_dispense(p20, SPIKE_VOL_UL, src, [plate[w] for w in dests],
                        height=SPIKE_HEIGHT_MM, touch_height=SPIKE_LOW_HEIGHT_MM,
                        disposal=0.0, touch_src=True)
         p20.drop_tip()
@@ -1061,47 +1193,48 @@ def run(protocol):
         pip.drop_tip()
 
     # ===================================================================================
-    # 2/3/4  stocks in and mixed; lactaldehyde curve; ABTS standards off the rack
+    # 2/3/4  stocks in and mixed; lactaldehyde curve; PaDa-1 off the rack
     # ===================================================================================
     for d in layout['dilutions']:
-        if d['stock_vol'] <= 0:                        # ABTS standards, handled below
+        if d['stock_vol'] <= 0:                        # PaDa-1, handled below
             continue
         src = (tuberack[d['src']] if d['src_kind'] == 'tube'
                else draw_at(dil_plate[d['src']], DILUTION_WELL_VOL_UL, d['stock_vol']))
         transfer(d['stock_vol'], src, dil_well(d['well']),
                  mix_well=dil_plate[d['well']])
 
-    for d in layout['abts_dils']:
+    # PaDa-1 is made up by hand and moved whole - no dilution, no mixing. It has to come
+    # across now, while the tube rack is still on the deck: slot 5 is about to become the
+    # ABTS plate.
+    for d in layout['pada_dils']:
         transfer(d['fill'], tuberack[d['src']], dil_well(d['well']))
 
     # ===================================================================================
-    # 5  spikes into the NNBT plate - all four blocks
+    # 5  spikes into the NNBT plate - all four blocks, 8-channel
     # ===================================================================================
-    # Serial lac donations, if LAC_SERIAL is on, have already left those wells short.
-    donated = {}
-    for d in layout['dilutions']:
-        if d['src_kind'] == 'dil' and d['stock_vol'] > 0:
-            donated[d['src']] = donated.get(d['src'], 0.0) + d['stock_vol']
-    left = {c: {'left': start_vol(f'A{c}') - donated.get(f'A{c}', 0.0)}
-            for c in (1, 2, 3)}
-
+    # THESE MUST COME FIRST. An 8-channel aspirate is one Z for all eight nozzles, which
+    # only works while every well in the source column still holds the same volume. The
+    # ABTS spikes below break that for A1/B1 and the enzyme wells, so nothing may
+    # 8-channel out of columns 1 or 2 afterwards.
     p20.configure_nozzle_layout(style=ALL, tip_racks=[tr20])     # 8-channel for spikes
     ctrl_cols = [f'A{c}' for c in range(1, 2 * BLOCK_COLS + 1)]
     enz_cols_a = [f'A{c}' for c in range(2 * BLOCK_COLS + 1, 4 * BLOCK_COLS + 1)]
-    spike_column(1, ctrl_cols, nnbt_plate, left[1])          # controls, both arms
+    spike_column(1, ctrl_cols, nnbt_plate)                   # controls, both arms
     if n:
-        spike_column(2, enz_cols_a, nnbt_plate, left[2])     # enzymes, both arms
+        spike_column(2, enz_cols_a, nnbt_plate)              # enzymes, both arms
+    p20.configure_nozzle_layout(style=SINGLE, start='H1', tip_racks=[tr20])
 
     # ===================================================================================
-    # 6/7  tube rack out, ABTS plate in, spike it
+    # 6/7  tube rack out, ABTS plate in, spike it SINGLE-NOZZLE
     # ===================================================================================
+    # One tip per sample, in layout order: PaDa-1 neat and 1:1000 down column 1, then
+    # NC1, NC2 and the enzymes across from column 2. No 8-channel pass can do this - the
+    # PaDa triplicates run down a column and the enzymes start at row C - and at 4+n tips
+    # it is cheaper than the two tip columns the old aligned layout needed.
     protocol.move_labware(tuberack, protocol_api.OFF_DECK, use_gripper=False)
     protocol.move_labware(abts_plate, SLOT_SWAP, use_gripper=False)
-    spike_column(3, [f'A{c}' for c in range(1, BLOCK_COLS + 1)], abts_plate, left[3])
-    if n:
-        spike_column(2, [f'A{c}' for c in range(BLOCK_COLS + 1, 2 * BLOCK_COLS + 1)],
-                     abts_plate, left[2])
-    p20.configure_nozzle_layout(style=SINGLE, start='H1', tip_racks=[tr20])
+    for g in layout['abts']:
+        spike_single(g['src'][1], g['wells'], abts_plate)
 
     # ===================================================================================
     # 8  reaction mixes into the NNBT plate
@@ -1144,16 +1277,34 @@ def run(protocol):
     p300.flow_rate.aspirate, p300.flow_rate.dispense = fast_a, fast_d
 
     # ===================================================================================
-    # 9  ABTS mix - LAST liquid step: ABTS is kinetic and starts on contact
+    # 9  ABTS mixes - LAST liquid step: ABTS is kinetic and starts on contact
     # ===================================================================================
-    abts_res = list(spread(layout['abts_total'], RES_ABTS, 'ABTS mix'))
-    pick300_column()
-    for i, c in enumerate(range(1, layout['abts_columns'] + 1)):
-        src = abts_res[min(i // BLOCK_COLS, len(abts_res) - 1)]
-        p300.aspirate(ABTS_MIX_VOL_UL, reservoir[src])
-        p300.dispense(ABTS_MIX_VOL_UL, abts_plate[f'A{c}'].bottom(z=REAGENT_HEIGHT_MM))
-        p300.touch_tip()
-    p300.drop_tip()
+    # 8-CHANNEL, WHOLE COLUMNS, on purpose. 190 uL is more than half a p300, so there is
+    # no multi-dispense to be had either way; going by column instead of by well is what
+    # keeps 30-odd kinetic reactions from starting minutes apart. The cost is that the
+    # empty rows of a part-filled column get mix with no sample - blank wells nobody
+    # reads. That is also why the PaDa samples all live in column 1: a column takes ONE
+    # mix, and an 8-channel dispense cannot tell rows apart.
+    abts_res_of = {}
+    for key, total in layout['abts_per_mix'].items():
+        abts_res_of[key] = list(spread(total, ABTS_MIX_RESERVOIR[key],
+                                       ABTS_MIX_LABEL[key]))[0]
+    # ONE FRESH COLUMN OF TIPS PER MIX. A tip that has carried the PaDa mix carries H2O2,
+    # and H2O2 in a laccase well is no longer a laccase assay. The laccase columns go
+    # first, so the enzyme samples are the ones that wait the shortest.
+    for key in (MIX_ABTS, MIX_PADA):
+        cols = sorted(c for c, k in layout['abts_col_mix'].items() if k == key)
+        if not cols:
+            continue
+        protocol.comment(f'  {ABTS_MIX_LABEL[key]} -> ABTS columns '
+                         f'{", ".join(str(c) for c in cols)}')
+        pick300_column()
+        for c in cols:
+            p300.aspirate(ABTS_MIX_VOL_UL, reservoir[abts_res_of[key]])
+            p300.dispense(ABTS_MIX_VOL_UL,
+                          abts_plate[f'A{c}'].bottom(z=REAGENT_HEIGHT_MM))
+            p300.touch_tip()
+        p300.drop_tip()
 
     # ===================================================================================
     # 10  hand over: ABTS plate to the reader, seal the NNBT plate, MALDI labware in
