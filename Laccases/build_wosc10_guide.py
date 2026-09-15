@@ -18,7 +18,8 @@ RES_NNBT, RES_BUFFER, RES_PURPALD = wosc10.RES_NNBT, wosc10.RES_BUFFER, wosc10.R
 RES_ABTS, RES_GUAIACOL = wosc10.RES_ABTS, wosc10.RES_GUAIACOL
 RES_PADA = wosc10.RES_PADA
 RES_NO_NNBT, RES_NO_NNBT_GUA = wosc10.RES_NO_NNBT, wosc10.RES_NO_NNBT_GUA
-RES_WATER, RES_MATRIX = wosc10.RES_WATER, wosc10.RES_MATRIX
+RES_WATER, MATRIX_TUBES = wosc10.RES_WATER, wosc10.MATRIX_TUBES
+SLOT_MALDI_TUBERACK = wosc10.SLOT_MALDI_TUBERACK
 HS_SLOT, SLOT_SWAP = wosc10.HS_SLOT, wosc10.SLOT_SWAP
 SLOT_TIPRACK_20, SLOT_DILUTION = wosc10.SLOT_TIPRACK_20, wosc10.SLOT_DILUTION
 SLOT_TIPRACK_300, SLOT_RESERVOIR = wosc10.SLOT_TIPRACK_300, wosc10.SLOT_RESERVOIR
@@ -196,7 +197,10 @@ deck_rows = [
     [SLOT_DILUTION, 'Dilution plate (96-well)', 'Holds every diluted stock in columns '
      '1&ndash;3. Stays on the deck the whole run: the MALDI 1:5 dilutions go in '
      'columns 4&ndash;12 of the same plate.'],
-    [SLOT_TIPRACK_300, '300 &micro;L tip rack', ''],
+    [SLOT_TIPRACK_300, '300 &micro;L tip rack &rarr; tube rack (MALDI only) &rarr; '
+     '300 &micro;L tip rack', 'If MALDI is on, the robot asks you to take the tip rack '
+     'out and put the tube rack back here with the capped matrix tube, then to swap '
+     'them back before Purpald.'],
     [SLOT_RESERVOIR, '12-well reagent reservoir', 'North (slot 11) must stay empty.'],
     ['12', 'Fixed trash', 'Do not move or cover.'],
 ]
@@ -239,6 +243,11 @@ for name, tube in zip(PADA_NAMES, PADA_TUBES):
                       f'{name} &ndash; ABTS positive control, made up by hand from '
                       'powder',
                       swatch(COLOUR['pada'])])
+tube_rows.append([', '.join(MATRIX_TUBES),
+                  'MALDI matrix (DHB/acetonitrile), <b>CAPPED</b> &ndash; only if MALDI '
+                  f'is on. Added when the rack goes back into slot {SLOT_MALDI_TUBERACK}; '
+                  'the second tube only if the run log asks for it.',
+                  swatch(COLOUR['matrix'])])
 story.append(styled_table(['Tube', 'Contents', 'Colour'], tube_rows,
              [30 * mm, 130 * mm, 14 * mm]))
 story.append(Spacer(1, 6))
@@ -272,7 +281,6 @@ res_rows = [
     (RES_NO_NNBT, 'No-NNBT mix (NC3, plain arm)', 'no_nnbt'),
     (RES_NO_NNBT_GUA, 'No-NNBT + guaiacol mix (NC3, guaiacol arm)', 'no_nnbt'),
     (RES_WATER, 'milliQ water (MALDI 1:5 dilution) &ndash; only if MALDI spotting is on', 'water'),
-    (RES_MATRIX, 'MALDI matrix &ndash; only if MALDI spotting is on', 'matrix'),
 ]
 res_table_rows = []
 for wells, label, tag in res_rows:
@@ -309,9 +317,11 @@ seq_rows = [
     ['9', 'Both ABTS mixes dispensed by column &ndash; always last, since ABTS reacts '
      'on contact', 'column 1 takes the PaDa-1 mix, the rest the laccase mix'],
     ['10', 'PAUSE', '<b>Take the ABTS plate to the reader immediately</b> (read '
-     'A414/A734), then seal the NNBT plate. Load the MALDI plate/target if MALDI is on.'],
+     'A414/A734), then seal the NNBT plate. If MALDI is on: MALDI target into slot 5, '
+     '300 &micro;L tips out of slot 7, tube rack with the capped matrix tube into slot 7.'],
     ['11', 'Incubate 2 h @ 40&deg;C', 'If MALDI is on, pauses every interval: '
-     '<b>unseal &rarr; robot spots &rarr; reseal.</b>'],
+     '<b>unseal &rarr; open/close the matrix tube when asked, once per spot &rarr; '
+     'reseal.</b>'],
     ['12', 'PAUSE for Purpald', '<b>Remove the plate seal</b>, then resume.'],
     ['13', 'Purpald dispensed, developed 10 min, done', '<b>Read A530.</b>'],
 ]
@@ -346,7 +356,8 @@ story.append(warn_box('Rule 3 &ndash; the LEFT mount (p300) cannot reach the rig
     '<b>Operator rule: slot 3 must only ever hold the 20 &micro;L tip rack.</b> Never '
     'place a tube rack, reservoir, or any labware the p300 touches there. The tube '
     'rack, ABTS plate and MALDI target all belong in slot 5, which sits in the middle '
-    'deck column and is reachable by both pipettes.']))
+    'deck column and is reachable by both pipettes. During MALDI only, the tube rack '
+    'goes in slot 7, where only the p20 visits it.']))
 
 # ===========================================================================
 # 8. WORKED EXAMPLE

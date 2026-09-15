@@ -13,6 +13,8 @@ PARAMETER in the Opentrons app - you should not need to open this file.
   NNBT plate  (slot 1, Heater-Shaker)  two arms: without and with guaiacol
   ABTS plate  (slot 5, swapped in)     activity, read immediately at A414/A734
   MALDI target(slot 5, swapped again)  spotted during the NNBT incubation
+  tube rack   (slot 7, MALDI only)     back on deck with the CAPPED matrix tube, while
+                                       the 300 uL tips wait off-deck until Purpald
 
 ABTS PLATE - there is NO ABTS-radical standard curve. The positive control is PaDa-1
 at 1:1000, made up by hand into ONE tube (there is no neat PaDa-1 powder to run):
@@ -76,8 +78,10 @@ RUN ORDER
        blocks 3-4 8-channel by column (all one mix)
   9  ABTS mixes - LAST, because ABTS is kinetic and starts on contact.
        column 1 gets the PaDa mix (H2O2), every other column the laccase mix
- 10  PAUSE - ABTS plate to the reader, seal the NNBT plate, MALDI target in
- 11  incubate 2 h @ 40 C, pausing every interval to unseal, spot MALDI, reseal
+ 10  PAUSE - ABTS plate to the reader, seal the NNBT plate, MALDI target in slot 5,
+       300 uL tips out of slot 7, tube rack + capped matrix tube into slot 7
+ 11  incubate 2 h @ 40 C, pausing every interval to unseal, premix + spot MALDI
+       (the robot asks you to OPEN and CLOSE the matrix tube for every spot), reseal
  12  Purpald, develop, read A530
 
 TWO RULES THAT HAVE ALREADY COST A RUN
@@ -266,16 +270,33 @@ MALDI_FLOW_UL_S = 7.6                  # spotting only. A 1 uL droplet placed on
 # MALDI: 5 uL sample + 20 uL milliQ = 1:5, one spot per condition. The 1:5 dilutions are
 # made on the SAME dilution plate, from column MALDI_DIL_FIRST_COL on - columns 1-3 hold
 # the assay dilutions, so there is no second plate to swap in.
+#
+# PREMIX. Matrix is NOT spotted on its own any more: each premix well gets
+#   20 uL milliQ + 25 uL matrix + 5 uL sample = 50 uL, and 2 uL of that is spotted.
+# That is the same 1:1 sample:matrix spot the old 1 uL matrix + 1 uL sample made on
+# the target, just mixed in a well. It fixes two failures seen on the robot:
+#   - 1 uL of acetonitrile matrix (the p20 minimum) was often not picked up or not
+#     dispensed. Acetonitrile vapour in a dry tip pushes a 1 uL plug straight out.
+#     25 uL, a pre-wetted tip, a slow aspirate and a pause fix that.
+#   - 25 uL on a 6.9 mm FLAT floor is ~0.7 mm deep and creeps to the wall, leaving the
+#     centre - where the tip is - dry. 50 uL with acetonitrile in it wets the floor.
 MALDI_SAMPLE_UL = 5.0
 MALDI_WATER_UL = 20.0
-MALDI_SPOT_UL = 1.0                    # sample per spot; p20 minimum
-MALDI_MATRIX_UL = 1.0                  # matrix goes down FIRST, sample lands on it
-MALDI_MIX_REPS = 3                     # mixed in place on the target (Lukas W-O-MS-01)
-MALDI_MIX_UL = 1.0                     # the p20's minimum, and half the 2 uL spot
-# MATRIX DRIES. Matrix is laid a batch at a time, then that batch's samples go on
-# immediately - so no matrix drop waits longer than one batch. Smaller batch = shorter
-# wait but more tips (one extra matrix tip per batch); bigger = fewer tips, longer wait.
-MALDI_MATRIX_BATCH = 4
+MALDI_MATRIX_UL = 25.0                 # from a capped tube, see MATRIX_TUBES;
+                                       # drawn as 20 + 5, the tip holds 20
+MALDI_PREMIX_UL = MALDI_WATER_UL + MALDI_MATRIX_UL + MALDI_SAMPLE_UL
+MALDI_MATRIX_PREWET_REPS = 2           # saturate the tip with acetonitrile vapour first
+MALDI_MATRIX_DELAY_S = 1.0             # after the matrix aspirate, before moving
+MALDI_MATRIX_DISPENSE_MM = 3.0         # above the water in the premix well: the matrix
+                                       # tip never touches liquid it could carry back
+MALDI_PREMIX_TIP_MM = 0.8              # mix and draw height in the 50 uL premix well
+MALDI_PREMIX_MIX_REPS = 5
+MALDI_PREMIX_MIX_UL = 8.0              # a bigger stroke drops the surface below the tip
+                                       # - check_maldi_geometry() enforces it
+MALDI_SPOT_UL = 2.0                    # premix per spot
+MALDI_SPOT_SURPLUS_UL = 1.0            # drawn extra, never dispensed: no air on steel
+MALDI_MIX_REPS = 3                     # aspirate/dispense on the target spreads the drop
+MALDI_MIX_UL = 1.0                     # the p20's minimum, half the 2 uL spot
 MALDI_SPOT_HEIGHT_MM = 0.3             # from the WELL BOTTOM, and the well is only
                                        # 0.1 mm deep, so this is ~0.2 mm above the
                                        # target face: into the droplet, not pressed on
@@ -291,6 +312,25 @@ MALDI_COLS = 24
 # per arm. NC1 (buffer) and NC3 (no NNBT) add nothing to the mass spectrum.
 def maldi_per_arm(n_enz):
     return 1 + n_enz                   # NC2 + the enzymes
+
+
+def matrix_plan(spots):
+    """[(tube, uL of matrix the run draws from it)], in the order the tubes are used.
+    Pour each tube with MATRIX_TUBE_DEAD_UL on top."""
+    need = spots * MALDI_MATRIX_UL
+    per_tube = MATRIX_TUBE_MAX_UL - MATRIX_TUBE_DEAD_UL
+    per_tube -= per_tube % MALDI_MATRIX_UL                # whole draws only
+    plan = []
+    for tube in MATRIX_TUBES:
+        if need <= 1e-9:
+            break
+        plan.append((tube, min(need, per_tube)))
+        need -= plan[-1][1]
+    if need > 1e-9:
+        raise ValueError(f'MALDI needs {spots * MALDI_MATRIX_UL:.0f} uL of matrix but '
+                         f'{len(MATRIX_TUBES)} tube(s) hold {len(MATRIX_TUBES) * per_tube:.0f}'
+                         ' uL. Add a tube to MATRIX_TUBES or use a longer interval.')
+    return plan
 
 
 MALDI_DIL_FIRST_COL = 4                # first dilution-plate column for the 1:5 wells
@@ -310,6 +350,13 @@ SLOT_TIPRACK_20 = '3'                  # 20 uL tips, p20 ONLY - see rule 3 in th
                                        #                             (north: 6, dil plate)
 SLOT_DILUTION = '6'                    # dilution plate; MALDI 1:5 wells from col 4
 SLOT_TIPRACK_300 = '7'                 # 300 uL tips                 (north: 10, empty)
+SLOT_MALDI_TUBERACK = '7'              # MALDI ONLY: the tube rack comes back here with
+                                       # the capped matrix tube while the 300 uL tips
+                                       # (idle until Purpald) wait off-deck. Nothing
+                                       # else works: 5 holds the target, 2 is east of
+                                       # the Heater-Shaker (max 53 mm, the rack is 54),
+                                       # 4 and 9 are north of single-nozzle targets,
+                                       # and 10/11 are out of reach for the H1 nozzle.
 SLOT_RESERVOIR = '8'                   # reagents                    (north: 11, empty)
 # Slots 2, 4, 9, 10, 11 MUST STAY EMPTY - clearance, not spare space.
 
@@ -324,6 +371,11 @@ HS_ADAPTER = 'opentrons_96_flat_bottom_adapter'  # MUST be declared or every Z i
 TUBERACK_ROWS = 4                      # rack is 4 rows (A-D) x 6 columns = 24 tubes
 TUBE_HEAT_INACT = 'C6'                 # fixed positions, so they never move
 TUBE_LACTALDEHYDE = 'D6'
+MATRIX_TUBES = ['B5', 'B6']            # MALDI matrix (DHB/acetonitrile), CAPPED, in the
+                                       # rack's free columns 5-6. The second tube is only
+                                       # used when the first cannot cover the run.
+MATRIX_TUBE_MAX_UL = 1500.0
+MATRIX_TUBE_DEAD_UL = 150.0            # the conical tip of the tube the p20 cannot empty
 
 # Reservoir. Four different reaction mixes, all premixed off-deck by you.
 RES_NNBT = ['A1', 'A2']                # buffer + NNBT                (2 wells: >13 mL)
@@ -340,7 +392,8 @@ RES_GUAIACOL = ['A7', 'A8']            # guaiacol buffer + NNBT + guaiacol
 RES_NO_NNBT = ['A9']                   # NC3: reaction mix WITHOUT NNBT
 RES_NO_NNBT_GUA = ['A10']              # NC3 guaiacol: no NNBT, with guaiacol
 RES_WATER = 'A11'                      # milliQ for the MALDI 1:5 dilution
-RES_MATRIX = 'A12'                     # MALDI matrix - the robot spots it
+# A12 is free. The MALDI matrix used to live here, but acetonitrile evaporates out of
+# an open reservoir well over a 2 h run - it is in a capped tube now (MATRIX_TUBES).
 RES_USABLE_UL = 13_000.0               # 15 mL nominal, minus fill margin
 RES_DEAD_UL = 1_000.0                  # pour this much extra so tips never hit air
 
@@ -678,29 +731,36 @@ def spread(total_ul, wells, reagent):
 # --- preflight: refuse to load on a rule we have already been burned by ----------------
 LABWARE_HEIGHT_MM = {'opentrons_96_tiprack_20ul': 64.7,
                      'opentrons_96_tiprack_300ul': 64.5, TUBERACK: 54.0,
-                     RESERVOIR_LOADNAME: 31.4, NNBT_PLATE: 14.3, 'TRASH': 999.0}
+                     RESERVOIR_LOADNAME: 31.4, NNBT_PLATE: 14.3, MALDI_PLATE: 18.0,
+                     'TRASH': 999.0}
 
 
 def check_deck():
     """Slot 9 can never be a single-nozzle target (trash in 12 is north of it) and
     nothing tall may sit north of one. opentrons_simulate does NOT catch the trash
-    case - it passed the layout the robot then refused."""
-    occupied = {str(HS_SLOT): NNBT_PLATE, SLOT_SWAP: TUBERACK,
-                SLOT_TIPRACK_20: 'opentrons_96_tiprack_20ul',
-                SLOT_DILUTION: DILUTION_PLATE,
-                SLOT_TIPRACK_300: 'opentrons_96_tiprack_300ul',
-                SLOT_RESERVOIR: RESERVOIR_LOADNAME, '12': 'TRASH'}
+    case - it passed the layout the robot then refused. Checked for the deck as set up
+    AND for the deck during MALDI spotting, when slots 5 and 7 hold something else."""
+    setup = {str(HS_SLOT): NNBT_PLATE, SLOT_SWAP: TUBERACK,
+             SLOT_TIPRACK_20: 'opentrons_96_tiprack_20ul',
+             SLOT_DILUTION: DILUTION_PLATE,
+             SLOT_TIPRACK_300: 'opentrons_96_tiprack_300ul',
+             SLOT_RESERVOIR: RESERVOIR_LOADNAME, '12': 'TRASH'}
+    maldi = dict(setup)
+    maldi[SLOT_SWAP] = MALDI_PLATE
+    del maldi[SLOT_TIPRACK_300]                   # tips wait off-deck ...
+    maldi[SLOT_MALDI_TUBERACK] = TUBERACK         # ... while the matrix rack is on
     problems = []
-    for slot, what in occupied.items():
-        if slot == '12':
-            continue
-        north = str(int(slot) + 3)
-        if north == '12':
-            problems.append(f'{what} in slot {slot} has the fixed trash bin north of '
-                            'it - this is the 2026-09-04 failure. Move it.')
-        elif north in occupied and LABWARE_HEIGHT_MM.get(occupied[north], 0) >= 50:
-            problems.append(f'{what} in slot {slot} has {occupied[north]} north of it '
-                            '- too tall for a single-nozzle move.')
+    for phase, occupied in (('setup', setup), ('MALDI', maldi)):
+        for slot, what in occupied.items():
+            if slot == '12':
+                continue
+            north = str(int(slot) + 3)
+            if north == '12':
+                problems.append(f'[{phase}] {what} in slot {slot} has the fixed trash '
+                                'bin north of it - this is the 2026-09-04 failure.')
+            elif north in occupied and LABWARE_HEIGHT_MM.get(occupied[north], 0) >= 50:
+                problems.append(f'[{phase}] {what} in slot {slot} has {occupied[north]} '
+                                'north of it - too tall for a single-nozzle move.')
     if problems:
         raise ValueError('DECK RULE VIOLATION:\n  - ' + '\n  - '.join(problems))
 
@@ -719,8 +779,23 @@ def check_mix_geometry():
                          'below ~0.8 mm and moves nothing.')
 
 
+def check_maldi_geometry():
+    """The premix well is shallow. The p20 has to stay under the surface at the bottom
+    of every mix stroke and after the spot draw - that is where it pooled at the wall
+    and came up dry."""
+    area = math.pi * (6.86 / 2) ** 2
+    for what, left in (('premix mix stroke', MALDI_PREMIX_UL - MALDI_PREMIX_MIX_UL),
+                       ('spot draw', MALDI_PREMIX_UL - MALDI_SPOT_UL
+                        - MALDI_SPOT_SURPLUS_UL)):
+        surface = left / area
+        if MALDI_PREMIX_TIP_MM > surface - ASPIRATE_MARGIN_MM:
+            raise ValueError(f'MALDI {what}: surface at {surface:.2f} mm, tip at '
+                             f'{MALDI_PREMIX_TIP_MM:g} mm - it would draw AIR.')
+
+
 check_deck()
 check_mix_geometry()
+check_maldi_geometry()
 
 
 # Colours for the Opentrons app's labware map. The app shows a coloured, named liquid
@@ -835,7 +910,6 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
         rounds = int(INCUBATION_MIN // interval) + 1
         spots = 2 * maldi_per_arm(n_enz) * rounds
         needs[RES_WATER] = ('milliQ (MALDI 1:5)', MALDI_WATER_UL * spots)
-        needs[RES_MATRIX] = ('MALDI matrix', MALDI_MATRIX_UL * spots)
     out += ['', '-' * 78, f'  RESERVOIR (slot {SLOT_RESERVOIR}) - pour these, '
             f'{RES_DEAD_UL / 1000:g} mL dead volume already included']
     for w in sorted(needs, key=lambda x: int(x[1:])):
@@ -853,6 +927,12 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
     for tube in sorted(tubes, key=lambda t: (int(t[1:]), t[0])):
         vol, names = tubes[tube]
         out.append(f'    {tube:<4} {" + ".join(names):<34} >= {vol + 300:.0f} uL')
+    if maldi_on:
+        out.append(f'  MATRIX - CAPPED tube(s), put in the rack when it goes back into '
+                   f'slot {SLOT_MALDI_TUBERACK} for MALDI')
+        for tube, vol in matrix_plan(spots):
+            out.append(f'    {tube:<4} {"MALDI matrix (DHB/acetonitrile)":<34} '
+                       f'{vol + MATRIX_TUBE_DEAD_UL:.0f} uL')
 
     # --- MALDI ---
     if maldi_on:
@@ -860,6 +940,8 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
         start = MALDI_ROWS.index(maldi_row)
         out += ['', '-' * 78,
                 f'  MALDI - {rounds} rounds every {interval} min, one spot per condition',
+                f'  premix per spot: {MALDI_WATER_UL:g} uL milliQ + {MALDI_MATRIX_UL:g} '
+                f'uL matrix + {MALDI_SAMPLE_UL:g} uL sample, {MALDI_SPOT_UL:g} uL spotted',
                 '  round   t (min)   plain row   guaiacol row']
         for r in range(rounds):
             if start + 2 * r + 1 >= len(MALDI_ROWS):
@@ -880,6 +962,7 @@ def run(protocol):
     prm = protocol.params
     n = prm.n_enz
     rounds = int(INCUBATION_MIN // prm.maldi_interval) + 1 if prm.maldi_on else 0
+    maldi_spots = 2 * maldi_per_arm(n) * rounds
     # rounds = 1
 
     # ---- the batch, straight from the app ------------------------------------------
@@ -954,8 +1037,9 @@ def run(protocol):
         spots = 2 * maldi_per_arm(n) * rounds
         res_liquids.append((RES_WATER, 'milliQ (MALDI 1:5)', 'water',
                             MALDI_WATER_UL * spots))
-        res_liquids.append((RES_MATRIX, 'MALDI matrix', 'matrix',
-                            MALDI_MATRIX_UL * spots))
+        for tube, vol in matrix_plan(spots):
+            tuberack[tube].load_liquid(liquid('MALDI matrix - CAPPED tube',
+                                              COLOUR['matrix']), vol + MATRIX_TUBE_DEAD_UL)
     for well, name, tag, vol in res_liquids:
         reservoir[well].load_liquid(liquid(name, COLOUR[tag]), vol + RES_DEAD_UL)
 
@@ -988,7 +1072,7 @@ def run(protocol):
         pip.pick_up_tip(well)
 
     def slow():
-        """Gentle p20, for placing 1 uL droplets on the MALDI target."""
+        """Gentle p20: droplets on the MALDI target, and acetonitrile matrix."""
         p20.flow_rate.aspirate = p20.flow_rate.dispense = MALDI_FLOW_UL_S
 
     def fast():
@@ -1007,7 +1091,8 @@ def run(protocol):
 
     # ---- tip budget: warn BEFORE the run rather than stalling mid-incubation --------
     per_arm = maldi_per_arm(n)                        # NC2 + the enzymes
-    maldi_tips = rounds * 2 * (per_arm + math.ceil(per_arm / MALDI_MATRIX_BATCH))
+    maldi_tips = rounds * (1 + 2 * 2 * per_arm)   # water tip per round; matrix and
+                                                  # sample tip per spot
     spike_cols = 2 if n else 1            # NNBT only: col 1, and col 2 if there are any
     abts_tips = len(layout['abts'])       # ABTS is single-nozzle: one tip per sample
     tips20 = (len(layout['dilutions']) + spike_cols * WELLS_PER_COLUMN + abts_tips
@@ -1036,6 +1121,7 @@ def run(protocol):
             raise ValueError(
                 f'MALDI needs {2 * rounds} rows from {prm.maldi_row}; the target has '
                 f'{len(MALDI_ROWS)}. Start higher up or use a longer interval.')
+        matrix_plan(maldi_spots)                       # raises if the tubes are short
 
     # ---- small helpers --------------------------------------------------------------
     def area(well):
@@ -1351,6 +1437,15 @@ def run(protocol):
     protocol.move_labware(abts_plate, protocol_api.OFF_DECK, use_gripper=False)
     if prm.maldi_on:                       # the dilution plate STAYS: MALDI uses col 4+
         protocol.move_labware(maldi_target, SLOT_SWAP, use_gripper=False)
+        # The matrix tube needs a rack on the deck. The 300 uL tips are idle until
+        # Purpald, so they step out of slot 7 and the tube rack takes their place.
+        protocol.pause(f'MALDI setup: take the 300 uL tip rack OUT of slot '
+                       f'{SLOT_TIPRACK_300} and keep it clean - it goes back before '
+                       'Purpald. Put the CAPPED matrix tube(s) '
+                       f'{", ".join(t for t, _ in matrix_plan(maldi_spots))} in the tube '
+                       f'rack and the rack in slot {SLOT_MALDI_TUBERACK}. Then resume.')
+        protocol.move_labware(tr300, protocol_api.OFF_DECK, use_gripper=False)
+        protocol.move_labware(tuberack, SLOT_MALDI_TUBERACK, use_gripper=False)
     protocol.pause(f'Seal the NNBT plate for the {INCUBATION_MIN} min incubation at '
                    f'{INCUBATION_TEMP_C} degC, then resume.')
 
@@ -1363,8 +1458,8 @@ def run(protocol):
         protocol.delay(minutes=INCUBATION_MIN)
         hs.deactivate_shaker()
     else:
-        # One MALDI condition = one NNBT well, diluted 1:5 in milliQ, one spot. The
-        # plain arm goes on one row, the guaiacol arm on the next. Only NC2 (the
+        # One MALDI condition = one NNBT well, premixed with milliQ and matrix, one spot.
+        # The plain arm goes on one row, the guaiacol arm on the next. Only NC2 (the
         # heat-inactivated control) and the enzymes are spotted - see maldi_per_arm().
         start_row = MALDI_ROWS.index(prm.maldi_row)
         spotted = ([layout['heat_dil']['well']]
@@ -1389,6 +1484,11 @@ def run(protocol):
             dil_i[0] += 1
             return w
 
+        # Which tube every matrix draw comes from, and what is left in each.
+        plan = matrix_plan(maldi_spots)
+        matrix_draws = [t for t, v in plan for _ in range(round(v / MALDI_MATRIX_UL))]
+        matrix_left = {t: v + MATRIX_TUBE_DEAD_UL for t, v in plan}
+
         for r in range(rounds):
             if r:
                 hs.set_and_wait_for_shake_speed(INCUBATION_RPM)
@@ -1396,54 +1496,78 @@ def run(protocol):
                 hs.deactivate_shaker()                 # never pipette a moving plate
             protocol.pause(f'MALDI round {r + 1}/{rounds} (t = {r * prm.maldi_interval} '
                            'min): UNSEAL the NNBT plate, then resume.')
+            todo = []                                  # (spot, NNBT well, premix well)
             for arm_i, arm in enumerate((plain, gua)):
                 row = MALDI_ROWS[start_row + 2 * r + arm_i]
-                # NO blow-out, NO touch-tip, NO air gap on the target anywhere below:
-                # air pushed through a 1 uL droplet sprays it onto neighbouring spots
-                # and leaves a bubble, which is a hole in the crystal layer.
-                for first in range(0, len(arm), MALDI_MATRIX_BATCH):
-                    batch = arm[first:first + MALDI_MATRIX_BATCH]
-                    # matrix pass: ONE tip, and it never touches a sample - otherwise
-                    # it would carry sample back into the shared matrix well.
-                    pick20()
-                    slow()                            # droplet work: gentle or it splashes
-                    for j in range(len(batch)):
-                        spot = maldi_target[f'{row}{first + j + 1}']
-                        p20.aspirate(MALDI_MATRIX_UL, reservoir[RES_MATRIX])
-                        p20.dispense(MALDI_MATRIX_UL,
-                                     spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
-                    fast()
-                    p20.drop_tip()
-                    # sample pass: fresh tip per condition, straight onto its matrix
-                    for j, (label, _, src_well) in enumerate(batch):
-                        col = first + j + 1
-                        well = dil_plate[next_maldi_well()]   # empty well, col 4+
-                        spot = maldi_target[f'{row}{col}']
-                        pick20()
-                        p20.aspirate(MALDI_WATER_UL, reservoir[RES_WATER])
-                        p20.dispense(MALDI_WATER_UL, well.bottom(z=DILUTION_HEIGHT_MM))
-                        p20.aspirate(MALDI_SAMPLE_UL,             # 5 uL of sample
-                                     nnbt_plate[src_well].bottom(z=MALDI_DRAW_HEIGHT_MM))
-                        p20.dispense(MALDI_SAMPLE_UL, well.bottom(z=DILUTION_HEIGHT_MM))
-                        p20.mix(5, 10.0,
-                                mix_at(well, MALDI_WATER_UL + MALDI_SAMPLE_UL, 10.0))
-                        slow()                        # from here the tip is on steel
-                        p20.aspirate(MALDI_SPOT_UL + 1.0,         # surplus stays in tip
-                                     mix_at(well, MALDI_WATER_UL + MALDI_SAMPLE_UL, 2.0))
-                        p20.dispense(MALDI_SPOT_UL,
-                                     spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
-                        p20.mix(MALDI_MIX_REPS, MALDI_MIX_UL,     # mix in place, 2 uL
-                                spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
-                        fast()
-                        p20.drop_tip()
+                for j, (_, _, src_well) in enumerate(arm):
+                    todo.append((maldi_target[f'{row}{j + 1}'], src_well,
+                                 dil_plate[next_maldi_well()]))
+
+            # WATER into every premix well of the round, ONE tip: the wells are empty,
+            # so this tip only ever touches water and may go back to the reservoir.
+            pick20()
+            for _, _, well in todo:
+                p20.aspirate(MALDI_WATER_UL, reservoir[RES_WATER])
+                p20.dispense(MALDI_WATER_UL, well.bottom(z=DILUTION_HEIGHT_MM))
+                clear(p20, well)
+            p20.drop_tip()
+
+            for spot, src_well, well in todo:
+                # MATRIX: its own tip, dropped straight after. It is dispensed ABOVE the
+                # water, so nothing from a premix well ever gets back into the tube.
+                tube = matrix_draws.pop(0)
+                protocol.pause(f'OPEN matrix tube {tube} (slot {SLOT_MALDI_TUBERACK}) '
+                               f'for spot {spot.well_name}, then resume.')
+                pick20()
+                slow()                                 # acetonitrile drips at speed
+                # 25 uL does not fit a 20 uL tip: 20 + 5, both while the tube is open.
+                done = 0.0
+                while done < MALDI_MATRIX_UL - 1e-6:
+                    stroke = min(MALDI_MATRIX_UL - done, P20_MAX)
+                    src = draw_at(tuberack[tube], matrix_left[tube], stroke)
+                    if not done:                       # pre-wet, first stroke only
+                        p20.mix(MALDI_MATRIX_PREWET_REPS, stroke, src)
+                    p20.aspirate(stroke, src)
+                    matrix_left[tube] -= stroke
+                    protocol.delay(seconds=MALDI_MATRIX_DELAY_S)
+                    touch(p20, tuberack[tube])         # drop falls back into the tube
+                    p20.dispense(stroke, well.bottom(z=MALDI_MATRIX_DISPENSE_MM))
+                    done += stroke
+                    clear(p20, well, over=MALDI_WATER_UL + done)
+                fast()
+                p20.drop_tip()
+                protocol.pause(f'CLOSE matrix tube {tube}, then resume.')
+
+                # SAMPLE: a clean tip into the NNBT well, premix, spot 2 uL, spread it.
+                pick20()
+                premix = well.bottom(z=MALDI_PREMIX_TIP_MM)
+                p20.aspirate(MALDI_SAMPLE_UL,
+                             nnbt_plate[src_well].bottom(z=MALDI_DRAW_HEIGHT_MM))
+                p20.dispense(MALDI_SAMPLE_UL, premix)
+                p20.mix(MALDI_PREMIX_MIX_REPS, MALDI_PREMIX_MIX_UL, premix)
+                slow()                                 # from here the tip is on steel
+                p20.aspirate(MALDI_SPOT_UL + MALDI_SPOT_SURPLUS_UL, premix)
+                # NO blow-out, NO touch-tip, NO air gap on the target: air pushed
+                # through the droplet sprays it onto neighbouring spots and leaves a
+                # bubble, which is a hole in the crystal layer.
+                p20.dispense(MALDI_SPOT_UL, spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
+                p20.mix(MALDI_MIX_REPS, MALDI_MIX_UL,     # 3 strokes spread the drop
+                        spot.bottom(z=MALDI_SPOT_HEIGHT_MM))
+                fast()
+                p20.drop_tip()
             protocol.pause('RESEAL the NNBT plate, then resume.')
         leftover = INCUBATION_MIN - (rounds - 1) * prm.maldi_interval
         if leftover > 0:
             hs.set_and_wait_for_shake_speed(INCUBATION_RPM)
             protocol.delay(minutes=leftover)
             hs.deactivate_shaker()
-        protocol.pause(f'Take the MALDI target from slot {SLOT_SWAP}, dry it and apply '
-                       'matrix. Spot key is in this log. Resume to finish.')
+        protocol.pause(f'Take the MALDI target from slot {SLOT_SWAP} and let the spots '
+                       'dry - the matrix is already in them. Spot key is in this log. '
+                       f'Take the tube rack out of slot {SLOT_MALDI_TUBERACK} and put the '
+                       '300 uL tip rack back. Resume to finish.')
+        protocol.move_labware(maldi_target, protocol_api.OFF_DECK, use_gripper=False)
+        protocol.move_labware(tuberack, protocol_api.OFF_DECK, use_gripper=False)
+        protocol.move_labware(tr300, SLOT_TIPRACK_300, use_gripper=False)
 
     # ===================================================================================
     # 12  Purpald, develop, hand off
