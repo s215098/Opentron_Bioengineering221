@@ -254,7 +254,7 @@ MALDI_MIX_UL = 1.0                     # the p20's minimum, and half the 2 uL sp
 # immediately - so no matrix drop waits longer than one batch. Smaller batch = shorter
 # wait but more tips (one extra matrix tip per batch); bigger = fewer tips, longer wait.
 MALDI_MATRIX_BATCH = 4
-MALDI_SPOT_HEIGHT_MM = 0.3             # from the WELL BOTTOM, and the well is only
+MALDI_SPOT_HEIGHT_MM = 0.2             # from the WELL BOTTOM, and the well is only
                                        # 0.1 mm deep, so this is ~0.2 mm above the
                                        # target face: into the droplet, not pressed on
                                        # the steel (which would occlude the orifice).
