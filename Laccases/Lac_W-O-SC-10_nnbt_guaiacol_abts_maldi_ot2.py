@@ -221,8 +221,8 @@ SLOT_TIPRACK_300 = '7'                 # 300 uL tips                 (north: 10,
 SLOT_RESERVOIR = '8'                   # reagents                    (north: 11, empty)
 # Slots 2, 4, 9, 10, 11 MUST STAY EMPTY - clearance, not spare space.
 
-NNBT_PLATE = 'nest_96_wellplate_200ul_flat'
-DILUTION_PLATE = 'nest_96_wellplate_200ul_flat'
+NNBT_PLATE = 'eppendorf_96_wellplate_350ul'
+DILUTION_PLATE = 'corning_96_wellplate_360ul_flat'
 ABTS_PLATE = 'corning_96_wellplate_360ul_flat'
 MALDI_PLATE = 'maldi_384_wellplate'    # Lukas's real definition, face at 18.0 mm
 RESERVOIR_LOADNAME = 'nest_12_reservoir_15ml'
