@@ -169,7 +169,7 @@ ENZ_TARGET_AUTO_FRACTION = 0.90        # auto target = this x the weakest enzyme
 
 # Lactaldehyde positive control. FIVE points - the sixth was dropped to make room for
 # NC3, so the controls fill one 3-column block exactly.
-LAC_STOCK_UM = 60_000.0               # tube D6. 1 M diluted 1:10 = 100000 uM
+LAC_STOCK_UM = 100_000.0              # tube D6. 1 M diluted 1:10 = 100000 uM
 LAC_GRADIENT_UM = [500, 1500, 3000, 4500, 6000]   # uM IN THE 150 uL REACTION
 LAC_SERIAL = False                     # False: every standard comes straight from the
                                        # D6 stock. True: the old chain, each point made
