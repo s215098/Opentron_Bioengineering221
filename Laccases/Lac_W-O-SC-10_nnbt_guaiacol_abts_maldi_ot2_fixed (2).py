@@ -237,7 +237,7 @@ REACTION_MIX_FLOW_SCALE = 0.5          # NNBT is in acetonitrile and drips at fu
 # SC-08 values. Blow-out stays at each pipette's own default - a fast blow-out into a
 # shallow well spatters and foams protein.
 P20_FLOW_UL_S = 20.0                   # default 7.6, hardware max 24
-P300_FLOW_UL_S = 200.0                 # default 94, hardware max 275
+P300_FLOW_UL_S = 150.0                 # default 94, hardware max 275
 P20_BLOWOUT_UL_S = 10                 # p20 default: gentle
 P300_BLOWOUT_UL_S = 110.0               # p300 default: gentle for this pipette
 MALDI_FLOW_UL_S = 7.6                  # spotting only. A 1 uL droplet placed onto a
@@ -315,7 +315,7 @@ RES_USABLE_UL = 13_000.0               # 15 mL nominal, minus fill margin
 RES_DEAD_UL = 1_000.0                  # pour this much extra so tips never hit air
 
 P20_MIN, P20_MAX = 1.0, 20.0
-P300_MIN, P300_MAX = 20.0, 300.0
+P300_MIN, P300_MAX = 20.0, 200.0
 
 # --- tip heights: absolute, above the well bottom, for staying OUT of liquid ----------
 EXTRA_HEIGHT_MM = 2.0                  # padding for the residual real-vs-modelled Z gap
@@ -865,7 +865,7 @@ def run(protocol):
     dil_plate = protocol.load_labware(DILUTION_PLATE, SLOT_DILUTION)
     reservoir = protocol.load_labware(RESERVOIR_LOADNAME, SLOT_RESERVOIR)
     tr20 = protocol.load_labware('opentrons_96_tiprack_20ul', SLOT_TIPRACK_20)
-    tr300 = protocol.load_labware('opentrons_96_tiprack_300ul', SLOT_TIPRACK_300)
+    tr300 = protocol.load_labware('opentrons_96_filtertiprack_200ul', SLOT_TIPRACK_300)
     abts_plate = protocol.load_labware(ABTS_PLATE, protocol_api.OFF_DECK)
     maldi_target = (protocol.load_labware(MALDI_PLATE, protocol_api.OFF_DECK)
                     if prm.maldi_on else None)
