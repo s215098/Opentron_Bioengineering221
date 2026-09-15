@@ -932,7 +932,7 @@ def run(protocol):
                     pip.dispense(vol, d.bottom(z=touch_height))
                     touch(pip, d)
             if disposal:
-                pip.blow_out(protocol.fixed_trash['A1'])
+                pip.blow_out(protocol.fixed_trash)
             i += len(batch)
 
     def dil_well(name):
