@@ -15,15 +15,15 @@ PARAMETER in the Opentrons app - you should not need to open this file.
   MALDI target(slot 5, swapped again)  spotted during the NNBT incubation
 
 ABTS PLATE - there is NO ABTS-radical standard curve. The positive control is PaDa-1
-powder, made up by hand into two tubes and run at two strengths:
+at 1:1000, made up by hand into ONE tube (there is no neat PaDa-1 powder to run):
 
-       1      2     3     4          col 1   PaDa-1, vertical triplicates, and the
-  A  PaDa    NC1   NC1   NC1                 ONLY column that takes the PaDa mix
-  B  neat    NC2   NC2   NC2         cols 2+ NC1, NC2, then the enzymes from row C,
-  C   |      Enz1  Enz1  Enz1                horizontal triplicates, laccase mix
-  D  PaDa    Enz2  ...                       (enzymes 7-8 spill into cols 5-7)
-  E  1:1000  Enz3
-  F   |      ...up to Enz6
+       1      2     3     4          col 1   PaDa-1 1:1000, a vertical triplicate,
+  A  PaDa    NC1   NC1   NC1                 and the ONLY column that takes the
+  B  1:1000  NC2   NC2   NC2                 PaDa mix
+  C   |      Enz1  Enz1  Enz1        cols 2+ NC1, NC2, then the enzymes from row C,
+  D   .      Enz2  ...                       horizontal triplicates, laccase mix
+  E   .      Enz3                            (enzymes 7-8 spill into cols 5-7)
+  F   .      ...up to Enz6
   G   .       .                      A dot is a well with reaction mix but no sample:
   H   .       .                      the mix goes in by whole columns (see below).
 
@@ -48,7 +48,7 @@ target, where a touch-tip is forbidden (see the spotting section).
 
 TWO WAYS TO SPIKE   the NNBT plate is spiked 8-CHANNEL: a dilution column holds eight
 samples in the same row order as the destination block, so one aspirate loads all eight
-nozzles. The ABTS plate cannot do that - its PaDa triplicates run DOWN a column and its
+nozzles. The ABTS plate cannot do that - its PaDa triplicate runs DOWN a column and its
 enzymes start at row C - so every ABTS spike is SINGLE-NOZZLE, one sample at a time.
 That is 4+n tips instead of two whole columns, so it is cheaper, and it is slower only
 before the mix goes in, which is where slowness does not matter.
@@ -67,7 +67,7 @@ RUN ORDER
   1  buffer into the dilution wells
   2  enzyme / NC3 / heat-inactivated stocks in, mixed      -> all at one molar conc
   3  lactaldehyde standard curve built by serial dilution
-  4  PaDa-1 neat and 1:1000 moved from tubes into dilution wells  (rack is about to go)
+  4  PaDa-1 1:1000 moved from its tube into a dilution well      (rack is about to go)
   5  10 uL spikes into the NNBT plate, all four blocks           - 8-channel
   6  PAUSE - swap the tube rack for the ABTS plate
   7  10 uL spikes into the ABTS plate                            - SINGLE-NOZZLE
@@ -76,7 +76,7 @@ RUN ORDER
        blocks 3-4 8-channel by column (all one mix)
   9  ABTS mixes - LAST, because ABTS is kinetic and starts on contact.
        column 1 gets the PaDa mix (H2O2), every other column the laccase mix
- 10  PAUSE - ABTS plate to the reader, seal the NNBT plate, MALDI labware in
+ 10  PAUSE - ABTS plate to the reader, seal the NNBT plate, MALDI target in
  11  incubate 2 h @ 40 C, pausing every interval to unseal, spot MALDI, reseal
  12  Purpald, develop, read A530
 
@@ -191,11 +191,13 @@ LAC_SERIAL = False                     # False: every standard comes straight fr
                                        # DILUTION_WELL_VOL_UL past ~400 uL, which this
                                        # plate cannot hold.
 
-# ABTS POSITIVE CONTROL - PaDa-1 powder, made up BY HAND into two tubes. There is no
+# ABTS POSITIVE CONTROL - PaDa-1 at 1:1000, made up BY HAND into one tube. There is no
 # ABTS-radical standard curve: we have no such standard, so the positive control is a
-# known-active enzyme at two strengths instead of a concentration series.
-PADA_NAMES = ['PaDa-1 neat', 'PaDa-1 1:1000']
-PADA_TUBES = ['A5', 'B5']
+# known-active enzyme instead of a concentration series. There is no neat PaDa-1 powder,
+# so only the 1:1000 strength runs. To bring a second strength back, add it to both
+# lists - the ABTS column and dilution column 3 size themselves from PADA_NAMES.
+PADA_NAMES = ['PaDa-1 1:1000']
+PADA_TUBES = ['A5']
 PADA_FILL_UL = 100.0                   # PRE-MADE and transferred, not diluted, so these
                                        # wells do NOT hold DILUTION_WELL_VOL_UL. 30 uL
                                        # is spiked out in two p20 loads (20 then 10) and
@@ -237,7 +239,7 @@ REPLICATES = 2                         # TEST BUILD: 2, not 3. Not 1 - multi_dis
                                        # single replicate would never run that path.
                                        # 2 is the smallest number that still tests it.
                                        # On the ABTS plate it also halves the PaDa
-                                       # column: neat in A1/B1, 1:1000 in C1/D1.
+                                       # column: 1:1000 in A1/B1.
 WELLS_PER_COLUMN = 8
 ROW_LETTERS = list('ABCDEFGH')
 BLOCK_COLS = REPLICATES                # a block is REPLICATES columns wide
@@ -261,7 +263,9 @@ P300_BLOWOUT_UL_S = 110.0               # p300 default: gentle for this pipette
 MALDI_FLOW_UL_S = 7.6                  # spotting only. A 1 uL droplet placed onto a
                                        # flat steel target at 15 uL/s splashes.
 
-# MALDI: 5 uL sample + 20 uL milliQ = 1:5, made in a fresh plate, one spot per condition.
+# MALDI: 5 uL sample + 20 uL milliQ = 1:5, one spot per condition. The 1:5 dilutions are
+# made on the SAME dilution plate, from column MALDI_DIL_FIRST_COL on - columns 1-3 hold
+# the assay dilutions, so there is no second plate to swap in.
 MALDI_SAMPLE_UL = 5.0
 MALDI_WATER_UL = 20.0
 MALDI_SPOT_UL = 1.0                    # sample per spot; p20 minimum
@@ -283,6 +287,14 @@ MALDI_SPOT_HEIGHT_MM = 0.3             # from the WELL BOTTOM, and the well is o
 MALDI_DRAW_HEIGHT_MM = 3.0             # draw height in the 150 uL NNBT well
 MALDI_ROWS = list('ABCDEFGHIJKLMNOP')  # 16 rows on the target
 MALDI_COLS = 24
+# What gets spotted: the heat-inactivated control (NC2) and the enzymes, one spot each
+# per arm. NC1 (buffer) and NC3 (no NNBT) add nothing to the mass spectrum.
+def maldi_per_arm(n_enz):
+    return 1 + n_enz                   # NC2 + the enzymes
+
+
+MALDI_DIL_FIRST_COL = 4                # first dilution-plate column for the 1:5 wells
+MALDI_DIL_WELLS = (12 - MALDI_DIL_FIRST_COL + 1) * 8   # columns 4-12 = 72 wells
 
 
 # =======================================================================================
@@ -296,7 +308,7 @@ SLOT_SWAP = '5'                        # tube rack -> ABTS plate -> MALDI target
                                        #                             (north: 8, reservoir)
 SLOT_TIPRACK_20 = '3'                  # 20 uL tips, p20 ONLY - see rule 3 in the header
                                        #                             (north: 6, dil plate)
-SLOT_DILUTION = '6'                    # dilution plate -> MALDI dilution plate
+SLOT_DILUTION = '6'                    # dilution plate; MALDI 1:5 wells from col 4
 SLOT_TIPRACK_300 = '7'                 # 300 uL tips                 (north: 10, empty)
 SLOT_RESERVOIR = '8'                   # reagents                    (north: 11, empty)
 # Slots 2, 4, 9, 10, 11 MUST STAY EMPTY - clearance, not spare space.
@@ -461,7 +473,8 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     #   col 1  NC1, NC2, NC3, lac x5      -> NNBT control blocks, both arms
     #                                        AND the ABTS negative controls
     #   col 2  enzymes 1-8                -> NNBT enzyme blocks, and the ABTS enzymes
-    #   col 3  PaDa-1 neat, PaDa-1 1:1000 -> the ABTS positive control only
+    #   col 3  PaDa-1 1:1000              -> the ABTS positive control only
+    #   col 4+ empty until the incubation -> the MALDI 1:5 dilutions
     #
     # COLUMNS 1 AND 2 ARE ROW-ALIGNED WITH THE NNBT BLOCKS. Every NNBT block is 8 groups,
     # one per ROW, REPLICATES columns wide, so a column of a block is "one replicate of
@@ -565,14 +578,18 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
             + enz_block(3, ARM_GUA, MIX_GUA))
 
     # ---- ABTS plate -----------------------------------------------------------------
-    # Column 1: the two PaDa-1 strengths as VERTICAL triplicates, so the whole positive
+    # Column 1: the PaDa-1 strength(s) as VERTICAL triplicates, so the whole positive
     # control sits in the one column that takes the H2O2 mix. Everything else is a
     # HORIZONTAL triplicate from column 2 on: NC1, NC2, then the enzymes from row C.
     # The fillers are not here - they exist only to keep an 8-channel column aspirate off
     # a dry well, and no 8-channel pass reads this plate's sources.
-    if 2 * REPLICATES > WELLS_PER_COLUMN:
-        raise ValueError(f'{REPLICATES} replicates x 2 PaDa strengths needs '
-                         f'{2 * REPLICATES} rows, but a column has {WELLS_PER_COLUMN}.')
+    if len(PADA_NAMES) * REPLICATES > WELLS_PER_COLUMN:
+        raise ValueError(f'{REPLICATES} replicates x {len(PADA_NAMES)} PaDa strengths '
+                         f'needs {len(PADA_NAMES) * REPLICATES} rows, but a column has '
+                         f'{WELLS_PER_COLUMN}.')
+    if max(int(d['well'][1:]) for d in dilutions) >= MALDI_DIL_FIRST_COL:
+        raise ValueError('the assay dilutions reach into the MALDI dilution columns - '
+                         'raise MALDI_DIL_FIRST_COL.')
     abts = []
     for i, d in enumerate(pada_dils):
         row0 = i * REPLICATES
@@ -816,7 +833,7 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
             needs[w] = (ABTS_MIX_LABEL[key], v)
     if maldi_on:
         rounds = int(INCUBATION_MIN // interval) + 1
-        spots = 2 * (3 + n_enz) * rounds
+        spots = 2 * maldi_per_arm(n_enz) * rounds
         needs[RES_WATER] = ('milliQ (MALDI 1:5)', MALDI_WATER_UL * spots)
         needs[RES_MATRIX] = ('MALDI matrix', MALDI_MATRIX_UL * spots)
     out += ['', '-' * 78, f'  RESERVOIR (slot {SLOT_RESERVOIR}) - pour these, '
@@ -851,7 +868,8 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
                                  'use a longer interval.')
             out.append(f'  {r + 1:<7} {r * interval:>7}   '
                        f'{MALDI_ROWS[start + 2 * r]:<11} {MALDI_ROWS[start + 2 * r + 1]}')
-        out.append(f'  columns 1..{3 + n_enz}: NC1, NC2, NC3, then the enzymes')
+        out.append(f'  columns 1..{maldi_per_arm(n_enz)}: NC2 heat-inactivated, then '
+                   'the enzymes')
     return out
 
 
@@ -887,8 +905,6 @@ def run(protocol):
     abts_plate = protocol.load_labware(ABTS_PLATE, protocol_api.OFF_DECK)
     maldi_target = (protocol.load_labware(MALDI_PLATE, protocol_api.OFF_DECK)
                     if prm.maldi_on else None)
-    maldi_dil = (protocol.load_labware(DILUTION_PLATE, protocol_api.OFF_DECK)
-                 if prm.maldi_on else None)
 
     p20 = protocol.load_instrument('p20_multi_gen2', 'right', tip_racks=[tr20])
     p300 = protocol.load_instrument('p300_multi_gen2', 'left', tip_racks=[tr300])
@@ -935,7 +951,7 @@ def run(protocol):
         for w, v in spread(total, ABTS_MIX_RESERVOIR[key], ABTS_MIX_LABEL[key]).items():
             res_liquids.append((w, ABTS_MIX_LABEL[key].capitalize(), tag, v))
     if prm.maldi_on:
-        spots = 2 * (3 + n) * rounds
+        spots = 2 * maldi_per_arm(n) * rounds
         res_liquids.append((RES_WATER, 'milliQ (MALDI 1:5)', 'water',
                             MALDI_WATER_UL * spots))
         res_liquids.append((RES_MATRIX, 'MALDI matrix', 'matrix',
@@ -990,7 +1006,7 @@ def run(protocol):
         take('300', p300, SLOT_TIPRACK_300, WELLS_PER_COLUMN)
 
     # ---- tip budget: warn BEFORE the run rather than stalling mid-incubation --------
-    per_arm = 3 + n                                   # 3 NCs + the enzymes
+    per_arm = maldi_per_arm(n)                        # NC2 + the enzymes
     maldi_tips = rounds * 2 * (per_arm + math.ceil(per_arm / MALDI_MATRIX_BATCH))
     spike_cols = 2 if n else 1            # NNBT only: col 1, and col 2 if there are any
     abts_tips = len(layout['abts'])       # ABTS is single-nozzle: one tip per sample
@@ -1006,13 +1022,16 @@ def run(protocol):
 
     # ---- MALDI fits? check now, not two hours into the incubation -------------------
     if prm.maldi_on:
-        per_round = 2 * (3 + n)                        # both arms, 3 NCs + n enzymes
-        if per_round * rounds > 96:
+        per_round = 2 * maldi_per_arm(n)               # both arms, NC2 + n enzymes
+        if per_round * rounds > MALDI_DIL_WELLS:
+            fit = MALDI_DIL_WELLS // per_round          # most rounds that fit
+            hint = (f'a longer interval (>= {math.ceil(INCUBATION_MIN / (fit - 1))} min)'
+                    if fit > 1 else 'one round only')
             raise ValueError(
                 f'MALDI needs {per_round} dilution wells per round x {rounds} rounds = '
-                f'{per_round * rounds}, but the plate has 96. Use a longer interval '
-                f'(>= {math.ceil(INCUBATION_MIN / (96 / per_round - 1)):.0f} min) or '
-                'fewer enzymes.')
+                f'{per_round * rounds}, but dilution-plate columns '
+                f'{MALDI_DIL_FIRST_COL}-12 hold {MALDI_DIL_WELLS}. Use {hint} or fewer '
+                'enzymes.')
         if MALDI_ROWS.index(prm.maldi_row) + 2 * rounds > len(MALDI_ROWS):
             raise ValueError(
                 f'MALDI needs {2 * rounds} rows from {prm.maldi_row}; the target has '
@@ -1245,7 +1264,7 @@ def run(protocol):
     # ===================================================================================
     # 6/7  tube rack out, ABTS plate in, spike it SINGLE-NOZZLE
     # ===================================================================================
-    # One tip per sample, in layout order: PaDa-1 neat and 1:1000 down column 1, then
+    # One tip per sample, in layout order: PaDa-1 1:1000 down column 1, then
     # NC1, NC2 and the enzymes across from column 2. No 8-channel pass can do this - the
     # PaDa triplicates run down a column and the enzymes start at row C - and at 4+n tips
     # it is cheaper than the two tip columns the old aligned layout needed.
@@ -1330,9 +1349,7 @@ def run(protocol):
     protocol.pause(f'TAKE THE ABTS PLATE from slot {SLOT_SWAP} to the reader NOW '
                    '(A414/A734) - it is already reacting. Then resume.')
     protocol.move_labware(abts_plate, protocol_api.OFF_DECK, use_gripper=False)
-    if prm.maldi_on:
-        protocol.move_labware(dil_plate, protocol_api.OFF_DECK, use_gripper=False)
-        protocol.move_labware(maldi_dil, SLOT_DILUTION, use_gripper=False)
+    if prm.maldi_on:                       # the dilution plate STAYS: MALDI uses col 4+
         protocol.move_labware(maldi_target, SLOT_SWAP, use_gripper=False)
     protocol.pause(f'Seal the NNBT plate for the {INCUBATION_MIN} min incubation at '
                    f'{INCUBATION_TEMP_C} degC, then resume.')
@@ -1347,22 +1364,28 @@ def run(protocol):
         hs.deactivate_shaker()
     else:
         # One MALDI condition = one NNBT well, diluted 1:5 in milliQ, one spot. The
-        # plain arm goes on one row, the guaiacol arm on the next.
+        # plain arm goes on one row, the guaiacol arm on the next. Only NC2 (the
+        # heat-inactivated control) and the enzymes are spotted - see maldi_per_arm().
         start_row = MALDI_ROWS.index(prm.maldi_row)
+        spotted = ([layout['heat_dil']['well']]
+                   + [d['well'] for d in layout['enz_dils']])
         conds = [(g['label'], g['arm'], g['wells'][0])          # sample replicate 1 only
-                 for g in layout['nnbt']
-                 if g['label'].startswith('NC') or g['src'][1] in
-                 [d['well'] for d in layout['enz_dils']]]
+                 for g in layout['nnbt'] if g['src'][1] in spotted]
+        if len(conds) != 2 * maldi_per_arm(n):
+            raise ValueError(f'MALDI picked {len(conds)} conditions, expected '
+                             f'{2 * maldi_per_arm(n)} - maldi_per_arm() is out of step.')
         plain = [c for c in conds if c[1] == ARM_PLAIN]
         gua = [c for c in conds if c[1] == ARM_GUA]
-        dil_i = [0]                               # running index into the fresh plate
+        dil_i = [0]                     # running index into dilution-plate col 4 on
+        maldi_offset = (MALDI_DIL_FIRST_COL - 1) * WELLS_PER_COLUMN
 
         def next_maldi_well():
-            if dil_i[0] >= 96:
-                raise ValueError('the MALDI dilution plate is full: '
+            if dil_i[0] >= MALDI_DIL_WELLS:
+                raise ValueError('the MALDI dilution columns are full: '
                                  f'{2 * len(plain)} wells per round x {rounds} rounds '
-                                 '> 96. Use a longer interval or fewer enzymes.')
-            w = _dil(dil_i[0])
+                                 f'> {MALDI_DIL_WELLS}. Use a longer interval or fewer '
+                                 'enzymes.')
+            w = _dil(maldi_offset + dil_i[0])
             dil_i[0] += 1
             return w
 
@@ -1394,7 +1417,7 @@ def run(protocol):
                     # sample pass: fresh tip per condition, straight onto its matrix
                     for j, (label, _, src_well) in enumerate(batch):
                         col = first + j + 1
-                        well = maldi_dil[next_maldi_well()]   # fresh dilution well
+                        well = dil_plate[next_maldi_well()]   # empty well, col 4+
                         spot = maldi_target[f'{row}{col}']
                         pick20()
                         p20.aspirate(MALDI_WATER_UL, reservoir[RES_WATER])

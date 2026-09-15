@@ -193,8 +193,9 @@ deck_rows = [
      'asks you to make each swap.'],
     [SLOT_TIPRACK_20, '20 &micro;L tip rack', '<b>p20 ONLY.</b> Never place a tube rack, '
      'reservoir or anything the p300 touches here (see &sect;7).'],
-    [SLOT_DILUTION, 'Dilution plate (96-well)', 'Holds every diluted stock. Swapped '
-     'for a fresh dilution plate mid-run if MALDI spotting is on.'],
+    [SLOT_DILUTION, 'Dilution plate (96-well)', 'Holds every diluted stock in columns '
+     '1&ndash;3. Stays on the deck the whole run: the MALDI 1:5 dilutions go in '
+     'columns 4&ndash;12 of the same plate.'],
     [SLOT_TIPRACK_300, '300 &micro;L tip rack', ''],
     [SLOT_RESERVOIR, '12-well reagent reservoir', 'North (slot 11) must stay empty.'],
     ['12', 'Fixed trash', 'Do not move or cover.'],
@@ -299,7 +300,7 @@ seq_rows = [
     ['1', 'Buffer dispensed into every dilution well', ''],
     ['2', 'Enzyme, NC3 and heat-inactivated stocks diluted and mixed to target conc.', ''],
     ['3', 'Lactaldehyde standard curve built by serial dilution', ''],
-    ['4', 'PaDa-1 neat and 1:1000 moved from tubes into dilution wells',
+    ['4', 'PaDa-1 1:1000 moved from its tube into a dilution well',
      'rack is about to leave'],
     ['5', '10 &micro;L spikes into all four NNBT plate blocks', ''],
     ['6', 'PAUSE', '<b>Swap the tube rack for the ABTS plate in slot 5.</b>'],
