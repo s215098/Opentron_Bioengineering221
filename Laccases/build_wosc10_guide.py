@@ -172,14 +172,37 @@ story.append(ListFlowable([
     ListItem(Paragraph('<b>ABTS plate</b> (swapped into slot 5) &ndash; a fast kinetic '
              'activity readout at A414/A734, read immediately after spiking.',
              styles['Body'])),
-    ListItem(Paragraph('<b>MALDI target</b> (swapped into slot 5 later) &ndash; optional, '
-             'spotted at intervals while the NNBT plate incubates.', styles['Body'])),
+    ListItem(Paragraph('<b>MALDI target</b> (swapped into slot 5 later) &ndash; optional. '
+             'Spotted at t = '
+             + ', '.join(f'{t:g}' for t in wosc10.MALDI_TIMEPOINTS_MIN)
+             + ' min while the NNBT plate incubates. <b>One row per sample</b> '
+             '(NC2, then the enzymes) with time running across the columns, two '
+             'columns per timepoint (plain, then guaiacol).', styles['Body'])),
+    ListItem(Paragraph('<b>10&times; readout plate</b> (swapped into slot 5 last) &ndash; '
+             'an empty plate of the <b>same type as the NNBT plate</b>. Every finished '
+             'reaction is diluted 10&times; into it after the incubation, and it '
+             'finishes on the Heater-Shaker, whose adapter will not take a Corning '
+             'flat plate.', styles['Body'])),
 ], bulletType='bullet', leftIndent=14))
 story.append(Paragraph(
-    'The NNBT plate holds up to 8 enzymes plus three negative controls '
-    '(NC1 = buffer only, NC2 = heat-inactivated enzyme, NC3 = active enzyme with no '
-    'NNBT in the mix) and a 5-point lactaldehyde standard curve, each in triplicate, '
-    'in both the plain and guaiacol arms.', styles['Body']))
+    f'The NNBT plate holds up to {wosc10.MAX_ENZYMES} enzymes plus two negative '
+    'controls (NC2 = heat-inactivated enzyme, NC3 = active enzyme with no NNBT in the '
+    f'mix) and a {len(wosc10.LAC_GRADIENT_UM)}-point lactaldehyde standard curve, each '
+    'in triplicate, in both the plain and guaiacol arms. <b>NC1 (buffer only) is no '
+    'longer on this plate</b> &ndash; ten enzymes need the row, and the 2026-09-15 run '
+    'showed NC1 and NC2 agreeing to within one plate-noise SD, so NC2 (which is NC1 '
+    'plus protein) is the better blank and does NC1\'s job. NC1 still runs on the '
+    'ABTS plate, out of dilution well '
+    f'{wosc10.ROW_LETTERS[len(PADA_NAMES)]}3.', styles['Body']))
+story.append(Paragraph(
+    '<b>The NNBT plate is read twice.</b> After the incubation, 15 &micro;L of every '
+    'well goes into 135 &micro;L of milliQ on the readout plate. Both plates then get '
+    'Purpald and develop on the Heater-Shaker, one after the other, and both are read '
+    'at A530: save them as <b>"-undiluted"</b> and <b>"-10x"</b>. The 10&times; plate '
+    'is the one whose standards should be on scale &ndash; on 2026-09-15 every '
+    'standard from 500 to 6000 &micro;M read as one flat line on the blank, because '
+    'the Purpald response peaks below 500 &micro;M and turns brown above it.',
+    styles['Body']))
 
 # ===========================================================================
 # 2. DECK LAYOUT
@@ -280,7 +303,9 @@ res_rows = [
     (RES_GUAIACOL, 'Guaiacol reaction mix (buffer + NNBT + guaiacol)', 'gua'),
     (RES_NO_NNBT, 'No-NNBT mix (NC3, plain arm)', 'no_nnbt'),
     (RES_NO_NNBT_GUA, 'No-NNBT + guaiacol mix (NC3, guaiacol arm)', 'no_nnbt'),
-    (RES_WATER, 'milliQ water (MALDI 1:5 dilution) &ndash; only if MALDI spotting is on', 'water'),
+    (RES_WATER, 'milliQ water &ndash; the 10&times; readout diluent (always), plus the '
+     'MALDI 1:5 premix if spotting is on. <b>Both wells</b>: one cannot hold it.',
+     'water'),
 ]
 res_table_rows = []
 for wells, label, tag in res_rows:
@@ -300,9 +325,9 @@ story.append(Paragraph(
 # ===========================================================================
 story += section('6. Run sequence &amp; where the robot will pause')
 story.append(Paragraph(
-    'Steps 1&ndash;5, 7&ndash;9 and 12 run automatically. The robot stops and waits for '
-    'you at every step marked <b>PAUSE</b> &ndash; read the on-screen message before '
-    'resuming.', styles['Body']))
+    'Steps 1&ndash;5, 7&ndash;9, 11, 13&ndash;14 and 16&ndash;17 run automatically. '
+    'The robot stops and waits for you at every step marked <b>PAUSE</b> &ndash; read '
+    'the on-screen message before resuming.', styles['Body']))
 
 seq_rows = [
     ['1', 'Buffer dispensed into every dilution well', ''],
@@ -319,15 +344,31 @@ seq_rows = [
     ['10', 'PAUSE', '<b>Take the ABTS plate to the reader immediately</b> (read '
      'A414/A734), then seal the NNBT plate. If MALDI is on: MALDI target into slot 5, '
      '300 &micro;L tips out of slot 7, tube rack with the capped matrix tube into slot 7.'],
-    ['11', 'Incubate 2 h @ 40&deg;C', 'If MALDI is on, pauses every interval: '
-     '<b>unseal &rarr; open/close the matrix tube when asked, once per spot &rarr; '
-     'reseal.</b>'],
-    ['12', 'PAUSE for Purpald', '<b>Remove the plate seal</b>, then resume.'],
-    ['13', 'Purpald dispensed, developed 10 min, done', '<b>Read A530.</b>'],
+    ['11', 'Incubate 2 h @ 40&deg;C', 'If MALDI is on, pauses at t = '
+     + ', '.join(f'{t:g}' for t in wosc10.MALDI_TIMEPOINTS_MIN) + ' min: '
+     '<b>unseal &rarr; open the matrix tube once for the whole session, close it at '
+     'the end &rarr; reseal.</b> Not once per spot.'],
+    ['12', 'PAUSE for the 10&times; readout',
+     '<b>Remove the plate seal. Put the empty readout plate in slot 5 and a FRESH '
+     '20 &micro;L tip rack in slot 3</b> &ndash; the 10&times; pass spends a whole '
+     'rack, one tip column per plate column. Check the run log for how many racks '
+     'this run needs in total.'],
+    ['13', '135 &micro;L milliQ into the readout plate, then 15 &micro;L out of every '
+     'NNBT well into it, mixed', ''],
+    ['14', '45 &micro;L Purpald into the <b>undiluted</b> plate, developed 10 min',
+     'this plate is quenched first on purpose &ndash; it still holds active enzyme at '
+     'full NNBT, while the 10&times; plate already runs ten times slower'],
+    ['15', 'PAUSE to swap the plates',
+     '<b>Take the undiluted plate off the Heater-Shaker to the reader (A530, save as '
+     '"-undiluted"), then put the 10&times; plate onto the Heater-Shaker.</b>'],
+    ['16', '10&times; plate shaken 2 min at 1000 rpm', '15 &micro;L under 135 &micro;L '
+     'does not mix itself, and Purpald meeting a concentrated bolus browns it for good'],
+    ['17', '50 &micro;L Purpald into the 10&times; plate, developed 10 min, done',
+     '<b>Read A530, save as "-10x".</b>'],
 ]
 story.append(styled_table(['#', 'Action', 'Operator note'], seq_rows,
              [10 * mm, 78 * mm, 96 * mm],
-             row_bg=lambda i: seq_rows[i][0] in ('6', '10', '12')))
+             row_bg=lambda i: seq_rows[i][0] in ('6', '10', '12', '15')))
 
 story.append(PageBreak())
 
