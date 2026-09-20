@@ -1,12 +1,29 @@
 """
 W-O-SC-10   NNBT/Purpald + guaiacol + ABTS + MALDI       Kristine Toft Johansen s215098
 =======================================================================================
+
+WHAT THE ABBREVIATIONS ARE
+  NNBT       N,N-bis(2-hydroxypropyl)-p-toluidine. The laccase substrate. Laccase
+             oxidises the C-H alpha to the tertiary nitrogen; the hemiaminal collapses
+             and releases LACTALDEHYDE (2-hydroxypropanal) plus the secondary amine.
+             That released lactaldehyde is what Purpald quantifies, which is why the
+             standard curve is lactaldehyde. Dissolved in acetonitrile - see
+             REACTION_MIX_FLOW_SCALE.
+  Purpald    4-amino-3-hydrazino-5-mercapto-1,2,4-triazole in strong NaOH. Adds to an
+             aldehyde, then the adduct must be OXIDISED BY DISSOLVED O2 to become the
+             purple chromophore read at A530. Air-saturated buffer holds only ~250 uM
+             O2, so aldehyde much above that gives the unoxidised intermediate -
+             YELLOW-BROWN, not purple - and the response stops being monotonic.
+  guaiacol   2-methoxyphenol, the redox mediator arm. 1 mM final in the reaction.
+  lactaldehyde  the Purpald standard, tube D6. See LAC_STOCK_UM / LAC_GRADIENT_UM.
+
 One dilution series feeds three readouts. Everything you change per run is a RUNTIME
 PARAMETER in the Opentrons app - you should not need to open this file.
 
   NNBT plate  (slot 1, Heater-Shaker)  two arms: without and with guaiacol
   ABTS plate  (slot 5, swapped in)     activity, read immediately at A414/A734
   MALDI target(slot 5, swapped again)  spotted during the NNBT incubation
+  readout plate (slot 5, swapped last) the 10x dilution of the NNBT plate, see below
   tube rack   (slot 7, MALDI only)     back on deck with the CAPPED matrix tube, while
                                        the 300 uL tips wait off-deck until Purpald
 
@@ -24,15 +41,38 @@ at 1:1000, made up by hand into ONE tube (there is no neat PaDa-1 powder to run)
   H   .       .                      the mix goes in by whole columns (see below).
 
 NNBT PLATE - 32 triplicate groups, 8 per 3-column block
-  cols  1-3   NC1, NC2, NC3, 5 lactaldehyde standards        mix: NNBT (NC3: no-NNBT)
+  cols  1-3   NC2, NC3, 4 lactaldehyde standards, enz 9-10   mix: NNBT (NC3: no-NNBT)
   cols  4-6   the same 8, with guaiacol                      mix: guaiacol (NC3: no-NNBT+gua)
   cols  7-9   enzymes 1-8                                    mix: NNBT
   cols 10-12  enzymes 1-8, with guaiacol                     mix: guaiacol
-  -> 8 enzymes maximum. NC1 = buffer only, NC2 = heat-inactivated enzyme,
+  -> 10 enzymes maximum. NC2 = heat-inactivated enzyme,
      NC3 = active enzyme in reaction mix WITHOUT NNBT.
 
-WELL RECIPE   10 uL spike + 140 uL reaction mix = 150 uL, 2 h @ 40 C,
-              + 50 uL Purpald = 200 uL (the plate's full capacity)
+NC1 IS NOT ON THIS PLATE ANY MORE. A control block is 8 rows and 10 enzymes need two
+of them, so two control slots had to go: NC1, and the fifth lactaldehyde point. NC1
+was the one to drop because the 2026-09-15 run measured NC1 = 0.948 and NC2 = 1.008,
+a difference of one plate-noise SD - NC2 is NC1 plus protein, so it is the better
+blank and it subsumes NC1. NC3 stayed because it is the only well that gives the
+reagent+plate optical floor (0.610), which every chromophore number is measured from.
+NC1 SURVIVES ON THE ABTS PLATE, out of a dilution well in column 3 (see build_layout).
+
+WELL RECIPE   10 uL spike + 140 uL reaction mix = 150 uL, 2 h @ 40 C.
+              Then the plate is read TWICE, see THE 10x READOUT below.
+
+THE 10x READOUT   Purpald's purple needs the aldehyde to stay in a narrow window. The
+2026-09-15 run put every lactaldehyde standard past it: 500-6000 uM read 0.94-1.12
+against a 0.929 blank, r2 = 0.03 over a 12-fold range - a flat line, because the
+response peaks somewhere below 500 uM and collapses to brown above it. So after the
+incubation every well is diluted 10x into milliQ on a SECOND plate, and BOTH plates
+are developed and read:
+  undiluted plate  135 uL left + 45 uL Purpald = 180 uL   (25% reagent, as before)
+  10x plate         15 uL sample + 135 uL milliQ + 50 uL Purpald = 200 uL
+The 10x plate is the one whose standards should be on scale. The undiluted plate keeps
+continuity with every previous run, and comparing the two says which side of the peak
+a sample sat on: 10x ~ undiluted/10 means the linear limb, anything higher means it
+was browning. Both develop ON the Heater-Shaker, 10 min at 40 C / 1000 rpm, because
+the purple step is an O2 oxidation and the shaking is what gets O2 back in - so they
+are done one after the other, not side by side.
 
 MULTI-DISPENSE   wherever one reagent goes to several wells in a row, ONE aspirate
 serves several of them, with a touch-tip after every dispense: spikes 2 wells per
@@ -74,9 +114,23 @@ RUN ORDER
        column 1 gets the PaDa mix (H2O2), every other column the laccase mix
  10  PAUSE - ABTS plate to the reader, seal the NNBT plate, MALDI target in slot 5,
        300 uL tips out of slot 7, tube rack + capped matrix tube into slot 7
- 11  incubate 2 h @ 40 C, pausing every interval to unseal, premix + spot MALDI
-       (the robot asks you to OPEN and CLOSE the matrix tube for every spot), reseal
- 12  Purpald, develop, read A530
+ 11  incubate 2 h @ 40 C, pausing at each MALDI timepoint (MALDI_TIMEPOINTS_MIN,
+       t = 0 / 30 / 120 min) to unseal, premix + spot, reseal. ONE row of the target
+       per sample and time running across its columns; the matrix tube is opened and
+       closed ONCE PER SESSION, not per spot
+ 12  PAUSE - MALDI target out, EMPTY READOUT PLATE into slot 5, 300 uL tips back into
+       slot 7, and a FRESH 20 uL rack into slot 3 (the 10x pass uses a whole rack)
+ 13  135 uL milliQ into the readout plate, then 15 uL out of every NNBT well into it,
+       8-channel, fresh tips per column, mixed
+ 14  45 uL Purpald into the UNDILUTED plate on the shaker; develop 10 min. It is
+       quenched first on purpose: it still holds active enzyme at full NNBT, while the
+       10x plate is already running ten times slower
+ 15  PAUSE - undiluted plate to the reader (save as "-undiluted"), 10x plate onto the
+       Heater-Shaker
+ 16  shake the 10x plate 2 min at 1000 rpm BEFORE Purpald - 15 uL under 135 uL will
+       not mix itself (diffusion moves ~0.9 mm in the 12 min it sat; the column is
+       ~4 mm), and a concentrated bolus meeting Purpald browns and stays brown
+ 17  50 uL Purpald into the 10x plate, develop, read A530 (save as "-10x")
 
 TWO RULES THAT HAVE ALREADY COST A RUN
   1  Slot 9 can never take a single-nozzle move: the trash in slot 12 is north of it,
@@ -102,7 +156,10 @@ except ImportError:                           # pragma: no cover - local preview
     protocol_api = None
     SINGLE = ALL = None
 
-MAX_ENZYMES = 8                               # 4 blocks of 8 groups fills the plate
+MAX_ENZYMES = 10                              # 8 in the enzyme block + 2 that spill
+                                              # into the control block's spare rows.
+                                              # check_block_budget() keeps this in
+                                              # step with LAC_GRADIENT_UM.
 
 
 def add_parameters(p):
@@ -141,12 +198,10 @@ def add_parameters(p):
     # --- MALDI -----------------------------------------------------------------------
     p.add_bool(display_name='MALDI spotting', variable_name='maldi_on', default=False,
                description='Spot the target during the NNBT incubation.')
-    p.add_int(display_name='MALDI interval (min)', variable_name='maldi_interval',
-              default=30, minimum=5, maximum=120,
-              description='Minutes between spotting rounds.')
     p.add_str(display_name='MALDI start row', variable_name='maldi_row', default='A',
               choices=[{'display_name': r, 'value': r} for r in 'ABCDEFGHIJKLMNOP'],
-              description='First target row. Each round uses two rows.')
+              description='First target row. ONE ROW PER SAMPLE: NC2, then the '
+                          'enzymes. Timepoints run across the columns.')
 
 
 metadata = {
@@ -156,21 +211,28 @@ metadata = {
         'Dilutes every enzyme to one molar concentration, plates an NNBT/Purpald assay '
         'with and without guaiacol plus three negative controls and a lactaldehyde '
         'curve, spikes an ABTS activity plate from the same dilutions, and spots a '
-        'MALDI target at intervals during the incubation.'),
+        'MALDI target at set timepoints during the incubation.'),
 }
 
 
 # =======================================================================================
 # SECTION 1 - THINGS THAT RARELY CHANGE   (everything per-run is a parameter above)
 # =======================================================================================
-ENZYME_NAMES = ['Lac-01', 'Lac-02', 'Lac-03', 'Lac-04',
-                'Lac-05', 'Lac-06', 'Lac-07', 'Lac-08']     # plate-map labels
+ENZYME_NAMES = ['Lac-01', 'Lac-02', 'Lac-03', 'Lac-04', 'Lac-05',
+                'Lac-06', 'Lac-07', 'Lac-08', 'Lac-09', 'Lac-10']   # plate-map labels
 ENZ_TARGET_AUTO_FRACTION = 0.90        # auto target = this x the weakest enzyme, in uM
 
 # Lactaldehyde positive control. FIVE points - the sixth was dropped to make room for
 # NC3, so the controls fill one 3-column block exactly.
 LAC_STOCK_UM = 100_000.0              # tube D6. 1 M diluted 1:10 = 100000 uM
-LAC_GRADIENT_UM = [500, 1500, 3000, 4500, 6000]   # uM IN THE 150 uL REACTION
+LAC_GRADIENT_UM = [400, 1200, 2500, 5000]         # uM IN THE 150 uL REACTION
+# FOUR points, not five: the fifth slot went to the 10th enzyme (see the header).
+# The numbers come off the 2026-09-15 run, where 500-6000 uM was one flat line on the
+# blank. With the 10x readout a well at C uM in the reaction is read at C x 15/200 =
+# C/13.3, so these four are read at 30, 90, 188 and 375 uM - spanning the window the
+# old run showed the response lives in, with the top point near the collapse so the
+# curve shows you where its own ceiling is. Stock draws from the 100 mM D6 tube are
+# 12, 36, 75 and 150 uL, all well clear of the p20 minimum, so the tube is unchanged.
 LAC_SERIAL = False                     # False: every standard comes straight from the
                                        # D6 stock. True: the old chain, each point made
                                        # from the one above it.
@@ -223,14 +285,46 @@ DILUTION_WELL_VOL_UL = 200.0           # per dilution well. An enzyme well gives
 # =======================================================================================
 SPIKE_VOL_UL = 10.0                    # sample per NNBT / ABTS well
 REACTION_MIX_VOL_UL = 140.0            # 10 + 140 = 150 uL during the incubation
-PURPALD_VOL_UL = 50.0                  # -> 200 uL, the plate's capacity
+PURPALD_VOL_UL = 50.0                  # 10x READOUT PLATE: 150 + 50 -> 200 uL
+PURPALD_UNDIL_VOL_UL = 45.0            # UNDILUTED PLATE: the 10x pass has taken 15 uL
+                                       # out, so it holds 135 uL, not 150. 45 keeps the
+                                       # reagent fraction at the same 25% - same NaOH,
+                                       # same chemistry - at the cost of 180 uL instead
+                                       # of 200, i.e. ~10% less pathlength than older
+                                       # runs. A constant factor across every well, so
+                                       # nothing WITHIN the plate is affected. Using
+                                       # 50 here instead would push it to 27% reagent.
 ABTS_MIX_VOL_UL = 190.0                # 10 + 190 = 200 uL on the ABTS plate
 REACTION_VOL_UL = SPIKE_VOL_UL + REACTION_MIX_VOL_UL
+
+# --- the 10x readout -----------------------------------------------------------------
+# 15 uL of a finished 150 uL reaction into 135 uL of milliQ, on a second plate, then
+# Purpald as usual. milliQ and not buffer on purpose: the Purpald reagent's NaOH
+# outweighs the assay buffer 10-20x either way, so it sets the development pH
+# regardless, and water simply gives it less to fight.
+READOUT_SAMPLE_UL = 15.0
+READOUT_WATER_UL = 135.0
+READOUT_VOL_UL = READOUT_SAMPLE_UL + READOUT_WATER_UL      # 150, as in the reaction
+READOUT_FACTOR = READOUT_VOL_UL / READOUT_SAMPLE_UL        # 10x
+READOUT_DRAW_MM = 2.0                  # into the finished NNBT well. The MALDI-spotted
+                                       # wells are down to ~135 uL by now (5 uL a round
+                                       # out of replicate 1 only), which is still ~4 mm
+                                       # of liquid over a 2 mm tip.
+READOUT_DISPENSE_MM = 1.0              # UNDER the 135 uL of water, not onto it
+READOUT_MIX_REPS = 3
+READOUT_MIX_UL = 20.0                  # the p20's whole barrel
+READOUT_MIX_RPM = 1000                 # the shake that actually does the mixing, run
+READOUT_MIX_MIN = 2                    # BEFORE Purpald - see the header. The p20
+                                       # strokes above only break the layer up; 20 uL
+                                       # in a 150 uL well cannot homogenise it.
 
 REPLICATES = 3                         # triplicates, side by side in a row
 WELLS_PER_COLUMN = 8
 ROW_LETTERS = list('ABCDEFGH')
 BLOCK_COLS = REPLICATES                # a 3-column block holds 8 triplicate groups
+CTRL_FIXED_SLOTS = 2                   # NC2 and NC3, the two controls that stayed
+CTRL_SPILL = max(0, MAX_ENZYMES - WELLS_PER_COLUMN)   # enzymes 9-10, in the control
+                                       # block's last rows. check_block_budget().
 
 INCUBATION_TEMP_C = 40                 # inside the module's 37-95 C range
 INCUBATION_RPM = 250
@@ -290,10 +384,44 @@ MALDI_SPOT_HEIGHT_MM = 0.2             # from the WELL BOTTOM, and the well is o
 MALDI_DRAW_HEIGHT_MM = 3.0             # draw height in the 150 uL NNBT well
 MALDI_ROWS = list('ABCDEFGHIJKLMNOP')  # 16 rows on the target
 MALDI_COLS = 24
+
+# WHEN TO SPOT. Not an interval any more - the useful timepoints are not evenly spaced.
+# t=0 is the baseline, t=30 catches the fast phase, and t=120 is the endpoint; the
+# intermediate points the old even-interval scheme spent matrix on were already
+# collected on an earlier run and added nothing.
+MALDI_TIMEPOINTS_MIN = [0, 30, 120]
+
+# TARGET LAYOUT: ONE ROW PER SAMPLE, TIME RUNNING ACROSS.
+#   rows     NC2 heat-inactivated, then the enzymes in enzyme-number order
+#   columns  t0 plain, t0 guaiacol, t30 plain, t30 guaiacol, t120 plain, t120 guaiacol
+# So a row is one sample's whole time course with both arms side by side, which is how
+# you actually want to read it off the instrument. The old layout put one ROUND on two
+# rows, which split a sample's time course across the target and - once enzymes 9-10
+# moved into the control block - listed the samples out of order.
+MALDI_ARMS = 2                         # plain, then guaiacol, within each timepoint
+
+
+def maldi_spot(row_index, round_index, arm_index, start_row):
+    """(row letter, 1-based column) of one spot."""
+    return (MALDI_ROWS[start_row + row_index],
+            MALDI_ARMS * round_index + arm_index + 1)
 # What gets spotted: the heat-inactivated control (NC2) and the enzymes, one spot each
 # per arm. NC1 (buffer) and NC3 (no NNBT) add nothing to the mass spectrum.
 def maldi_per_arm(n_enz):
-    return 1 + n_enz                   # NC2 + the enzymes
+    return 1 + n_enz                   # NC2 + the enzymes: one TARGET ROW each
+
+
+def maldi_spot_count(n_enz):
+    """Total spots = rows x timepoints x arms. Also the number of premix wells."""
+    return maldi_per_arm(n_enz) * len(MALDI_TIMEPOINTS_MIN) * MALDI_ARMS
+
+
+def maldi_rows(layout):
+    """Target row labels, top to bottom: NC2 then the enzymes in enzyme-number
+    order - which is NOT plate-block order, since enzymes 9-10 sit in the control
+    block."""
+    return ([layout['heat_dil']['name']]
+            + [d['name'] for d in layout['enz_dils']])
 
 
 def matrix_plan(spots):
@@ -311,7 +439,8 @@ def matrix_plan(spots):
     if need > 1e-9:
         raise ValueError(f'MALDI needs {spots * MALDI_MATRIX_UL:.0f} uL of matrix but '
                          f'{len(MATRIX_TUBES)} tube(s) hold {len(MATRIX_TUBES) * per_tube:.0f}'
-                         ' uL. Add a tube to MATRIX_TUBES or use a longer interval.')
+                         ' uL. Add a tube to MATRIX_TUBES or drop a timepoint from '
+                         'MALDI_TIMEPOINTS_MIN.')
     return plan
 
 
@@ -343,6 +472,14 @@ SLOT_RESERVOIR = '8'                   # reagents                    (north: 11,
 # Slots 2, 4, 9, 10, 11 MUST STAY EMPTY - clearance, not spare space.
 
 NNBT_PLATE = 'eppendorf_96_wellplate_350ul'
+READOUT_PLATE = NNBT_PLATE             # THE SAME PLATE TYPE AS THE NNBT PLATE, and not
+                                       # by preference: the 10x plate finishes the run
+                                       # ON the Heater-Shaker, and
+                                       # opentrons_96_flat_bottom_adapter refuses to
+                                       # stack corning_96_wellplate_360ul_flat.
+                                       # Matching plates also means matching well
+                                       # geometry, so the two A530 reads differ only by
+                                       # the dilution and the Purpald volume.
 DILUTION_PLATE = 'corning_96_wellplate_360ul_flat'
 ABTS_PLATE = 'corning_96_wellplate_360ul_flat'
 MALDI_PLATE = 'maldi_384_wellplate'    # Lukas's real definition, face at 18.0 mm
@@ -363,9 +500,9 @@ MATRIX_TUBE_DEAD_UL = 150.0            # the conical tip of the tube the p20 can
 RES_NNBT = ['A1', 'A2']                # buffer + NNBT                (2 wells: >13 mL)
 RES_BUFFER = 'A3'                      # dilution buffer + the NC1 spike
 RES_PURPALD = ['A4']
-RES_ABTS = ['A5']                      # laccase ABTS mix. One well: even at 8 enzymes
-                                       # the plate takes under 6 mL, and A6 is now the
-                                       # PaDa mix.
+RES_ABTS = ['A5']                      # laccase ABTS mix. One well: even at 10 enzymes
+                                       # the plate takes 6 columns x 8 x 190 = 9.1 mL,
+                                       # and A6 is now the PaDa mix.
 RES_PADA = ['A6']                      # PaDa-1 ABTS mix: H2O2 instead of Cu2+, and a
                                        # different pH. PaDa-1 is a peroxygenase, so it
                                        # cannot run in the laccase mix. Column 1 of the
@@ -373,9 +510,16 @@ RES_PADA = ['A6']                      # PaDa-1 ABTS mix: H2O2 instead of Cu2+, 
 RES_GUAIACOL = ['A7', 'A8']            # guaiacol buffer + NNBT + guaiacol
 RES_NO_NNBT = ['A9']                   # NC3: reaction mix WITHOUT NNBT
 RES_NO_NNBT_GUA = ['A10']              # NC3 guaiacol: no NNBT, with guaiacol
-RES_WATER = 'A11'                      # milliQ for the MALDI 1:5 dilution
-# A12 is free. The MALDI matrix used to live here, but acetonitrile evaporates out of
-# an open reservoir well over a 2 h run - it is in a capped tube now (MATRIX_TUBES).
+RES_WATER = ['A11', 'A12']             # milliQ: the MALDI 1:5 dilutions AND the 10x
+                                       # readout. TWO WELLS, and that is not optional -
+                                       # the readout alone is 135 uL x 96 = 13.0 mL and
+                                       # a well only carries RES_USABLE_UL once its
+                                       # RES_DEAD_UL is in. spread() sizes it; both
+                                       # MALDI and the readout draw through water_src()
+                                       # in run(), which empties A11 before A12.
+# A12 used to be free. The MALDI matrix used to live there, but acetonitrile evaporates
+# out of an open reservoir well over a 2 h run - it is in a capped tube now
+# (MATRIX_TUBES), which is what freed A12 for this.
 RES_USABLE_UL = 13_000.0               # 15 mL nominal, minus fill margin
 RES_DEAD_UL = 1_000.0                  # pour this much extra so tips never hit air
 
@@ -505,10 +649,9 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
         min([e['conc'] for e in enz_um] + [heat_um]) * ENZ_TARGET_AUTO_FRACTION)
 
     # ---- dilution plate -------------------------------------------------------------
-    #   col 1  NC1, NC2, NC3, lac x5      -> NNBT control blocks, both arms
-    #                                        AND the ABTS negative controls
+    #   col 1  NC2, NC3, lac x4, enz 9-10 -> NNBT control blocks, both arms
     #   col 2  enzymes 1-8                -> NNBT enzyme blocks, and the ABTS enzymes
-    #   col 3  PaDa-1 1:1000              -> the ABTS positive control only
+    #   col 3  PaDa-1 1:1000, then NC1    -> the ABTS plate ONLY
     #   col 4+ empty until the incubation -> the MALDI 1:5 dilutions
     #
     # COLUMNS 1 AND 2 ARE ROW-ALIGNED WITH THE NNBT BLOCKS. Every NNBT block is 8 groups,
@@ -520,13 +663,16 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     # COLUMN 3 IS NOT, and does not have to be: the ABTS plate is spiked single-nozzle,
     # so its two wells are free to carry PADA_FILL_UL instead of a full well.
     #
-    # NC1 and NC2 USED TO BE DUPLICATED HERE at the short fill, purely so the old
-    # 8-channel ABTS pass had a uniform column to aspirate from. Single-nozzle spiking
-    # removed that constraint, so the ABTS negative controls now come straight out of the
-    # 200 uL col-1 wells: 90 uL out of 200 instead of 30 out of 80, which turns the worst
-    # draw's clearance from 0.56 mm into 1.49 mm and saves an aliquot of heat-inactivated
-    # enzyme. It is safe ONLY because no 8-channel pass touches column 1 after the ABTS
-    # spikes have pulled A1 and B1 below their neighbours - see step 7 in run().
+    # NC1 LIVES IN COLUMN 3 NOW. It is off the NNBT plate entirely (see the header), so
+    # its only job is the ABTS plate's buffer control - 30 uL, single-nozzle. Column 3 is
+    # the one column no 8-channel pass ever aspirates, so it does not have to be row-
+    # aligned with anything and its wells are free to carry PADA_FILL_UL instead of a
+    # full 200. That is the same 30-out-of-100 draw the PaDa well has already proved.
+    #
+    # NC2 is still drawn single-nozzle out of its 200 uL col-1 well for ABTS: 30 uL out
+    # of 200 leaves 1.49 mm of clearance on the worst draw. It is safe ONLY because no
+    # 8-channel pass touches column 1 after the ABTS spikes have pulled that well below
+    # its neighbours - see step 7 in run().
     dilutions = []
     V_MAIN, V_PADA = DILUTION_WELL_VOL_UL, PADA_FILL_UL
 
@@ -545,19 +691,24 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     def _w(row, col):
         return f'{ROW_LETTERS[row]}{col}'
 
+    def filler(well):
+        """Idle nozzles would otherwise aspirate air. Buffer costs nothing and the
+        NNBT rows these feed are unused anyway, so the spikes land in wells nobody
+        reads."""
+        return add_dil(well, f'(unused row {well[0]})', 'res', RES_BUFFER, None, V_MAIN,
+                       'filler: keeps the 8th nozzle out of a dry well')
+
     # --- column 1: the NNBT control block, in block row order ------------------------
-    nc1_dil = add_dil(_w(0, 1), 'NC1 buffer only', 'res', RES_BUFFER, None, V_MAIN,
-                      'buffer-only well: an 8-channel column aspirate cannot reach '
-                      'the reservoir, so NC1 needs a well like everything else')
-    heat_dil = add_dil(_w(1, 1), 'NC2 heat-inactivated', 'tube', TUBE_HEAT_INACT,
+    heat_dil = add_dil(_w(0, 1), 'NC2 heat-inactivated', 'tube', TUBE_HEAT_INACT,
                        heat_um, V_MAIN)
-    nc3_dil = add_dil(_w(2, 1), f'NC3 ({enz_um[nc3_index]["name"]})', 'tube',
+    nc3_dil = add_dil(_w(1, 1), f'NC3 ({enz_um[nc3_index]["name"]})', 'tube',
                       _tube(nc3_index), enz_um[nc3_index]['conc'], V_MAIN,
                       'second aliquot, keeps NC3 off the enzyme well so neither is '
                       'over-drawn')
     spike_factor = REACTION_VOL_UL / SPIKE_VOL_UL          # 15x
     lac_dils, src_conc, src = [], float(LAC_STOCK_UM), ('tube', TUBE_LACTALDEHYDE)
-    for row, um in enumerate(sorted(LAC_GRADIENT_UM, reverse=True), start=3):
+    for row, um in enumerate(sorted(LAC_GRADIENT_UM, reverse=True),
+                             start=CTRL_FIXED_SLOTS):
         want = um * spike_factor
         d = add_dil(_w(row, 1), f'Lac-std {um:g} uM', src[0], src[1], src_conc, V_MAIN,
                     'serial' if src[0] == 'dil' else '', conc_to=want)
@@ -565,17 +716,31 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
         if LAC_SERIAL:                                 # chain: next point comes from
             src_conc, src = want, ('dil', d['well'])   # this one. See LAC_SERIAL.
 
-    # --- column 2: the enzymes, in enzyme block row order ----------------------------
-    enz_dils = [add_dil(_w(i, 2), e['name'], 'tube', _tube(i), e['conc'], V_MAIN)
-                for i, e in enumerate(enz_um)]
-    # Idle nozzles would otherwise aspirate air. Buffer costs nothing and the NNBT and
-    # ABTS rows these feed are unused anyway, so the spikes land in wells nobody reads.
-    fillers = [add_dil(_w(i, 2), f'(unused row {ROW_LETTERS[i]})', 'res', RES_BUFFER,
-                       None, V_MAIN, 'filler: keeps the 8th nozzle out of a dry well')
-               for i in range(n, WELLS_PER_COLUMN)]
+    # The control block's last CTRL_SPILL rows: the enzymes that do not fit the 8-row
+    # enzyme block. They are ordinary enzyme samples in an ordinary NNBT/guaiacol mix -
+    # the only thing "control block" means for them is which column they sit in.
+    spill_dils, spill_enz = [], []
+    for k in range(CTRL_SPILL):
+        row, i = CTRL_FIXED_SLOTS + len(LAC_GRADIENT_UM) + k, WELLS_PER_COLUMN + k
+        if i < n:
+            d = add_dil(_w(row, 1), enz_um[i]['name'], 'tube', _tube(i),
+                        enz_um[i]['conc'], V_MAIN,
+                        'enzyme 9-10: the control block is where they fit')
+            spill_enz.append(d)
+        else:
+            d = filler(_w(row, 1))
+        spill_dils.append(d)
 
-    # --- column 3: the ABTS positive control -----------------------------------------
-    # Made up by hand as powder in buffer, transferred whole - no dilution on deck.
+    # --- column 2: enzymes 1-8, in enzyme block row order ----------------------------
+    head = min(n, WELLS_PER_COLUMN)
+    block_dils = [add_dil(_w(i, 2), e['name'], 'tube', _tube(i), e['conc'], V_MAIN)
+                  for i, e in enumerate(enz_um[:head])]
+    fillers = [filler(_w(i, 2)) for i in range(head, WELLS_PER_COLUMN)]
+    enz_dils = block_dils + spill_enz        # every enzyme, in enzyme-number order
+
+    # --- column 3: the ABTS-only wells -----------------------------------------------
+    # PaDa-1 is made up by hand as powder in buffer and transferred whole - no dilution
+    # on deck. NC1 follows it: buffer only, and only the ABTS plate reads it.
     pada_dils = []
     for row, (name, tube) in enumerate(zip(PADA_NAMES, PADA_TUBES)):
         d = {'name': name, 'well': _w(row, 3), 'src_kind': 'tube', 'src': tube,
@@ -583,26 +748,30 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
              'fill': V_PADA, 'note': 'pre-made by hand, transferred not diluted'}
         dilutions.append(d)
         pada_dils.append(d)
+    nc1_dil = add_dil(_w(len(PADA_NAMES), 3), 'NC1 buffer only', 'res', RES_BUFFER,
+                      None, V_PADA,
+                      'ABTS ONLY - NC1 is off the NNBT plate. Column 3 is never '
+                      'aspirated 8-channel, so it needs no row alignment')
 
     # ---- NNBT plate: four blocks of eight groups ------------------------------------
     def ctrl_block(block, arm, mix, nomix):
-        """One control block: NC1, NC2, NC3, then the 5 lactaldehyde standards."""
+        """One control block: NC2, NC3, the lactaldehyde standards, then whichever
+        enzymes spilled out of the enzyme block. Row order matches dilution column 1,
+        which is what lets one 8-channel aspirate load all eight."""
         groups = [
-            {'label': 'NC1 buffer only', 'arm': arm, 'mix': mix,
-             'src': ('dil', nc1_dil['well'])},
             {'label': heat_dil['name'], 'arm': arm, 'mix': mix,
              'src': ('dil', heat_dil['well'])},
             {'label': nc3_dil['name'], 'arm': arm, 'mix': nomix,
              'src': ('dil', nc3_dil['well'])},
         ] + [{'label': d['name'], 'arm': arm, 'mix': mix, 'src': ('dil', d['well'])}
-             for d in lac_dils]
+             for d in lac_dils + spill_dils]
         for slot, g in enumerate(groups):
             g['wells'] = _block_wells(block, slot)
         return groups
 
     def enz_block(block, arm, mix):
         groups = [{'label': d['name'], 'arm': arm, 'mix': mix,
-                   'src': ('dil', d['well'])} for d in enz_dils + fillers]
+                   'src': ('dil', d['well'])} for d in block_dils + fillers]
         for slot, g in enumerate(groups):
             g['wells'] = _block_wells(block, slot)
         return groups
@@ -650,7 +819,7 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     for g in nnbt[:16]:                                   # the two control blocks
         per_mix[g['mix']] = per_mix.get(g['mix'], 0.0) + REACTION_MIX_VOL_UL * REPLICATES
         ctrl_wells[g['mix']] = ctrl_wells.get(g['mix'], 0) + REPLICATES
-    enz_cols = BLOCK_COLS if n else 0
+    enz_cols = BLOCK_COLS if head else 0
     per_mix[MIX_NNBT] = per_mix.get(MIX_NNBT, 0.0) + \
         REACTION_MIX_VOL_UL * WELLS_PER_COLUMN * enz_cols
     per_mix[MIX_GUA] = per_mix.get(MIX_GUA, 0.0) + \
@@ -666,13 +835,33 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
             per_mix[key] += (P300_MIN * p300_loads(enz_cols, REACTION_MIX_VOL_UL)
                              * WELLS_PER_COLUMN)
 
-    nnbt_columns = 2 * BLOCK_COLS + (2 * BLOCK_COLS if n else 0)
-    purpald_total = (PURPALD_VOL_UL * WELLS_PER_COLUMN * nnbt_columns
-                     + P300_MIN * p300_loads(nnbt_columns, PURPALD_VOL_UL)
-                     * WELLS_PER_COLUMN)
+    nnbt_columns = 2 * BLOCK_COLS + (2 * BLOCK_COLS if head else 0)
+
+    # PURPALD GOES ONTO TWO PLATES: PURPALD_UNDIL_VOL_UL into the NNBT plate once the
+    # 10x pass has drawn 15 uL out of it, and PURPALD_VOL_UL into the readout plate.
+    # Both are 8-channel by column, so each costs a whole column of wells and each
+    # load's disposal volume is paid by all eight nozzles.
+    purpald_total = sum(
+        vol * WELLS_PER_COLUMN * nnbt_columns
+        + P300_MIN * p300_loads(nnbt_columns, vol) * WELLS_PER_COLUMN
+        for vol in (PURPALD_VOL_UL, PURPALD_UNDIL_VOL_UL))
+
+    # milliQ: the 10x readout's diluent, plus the MALDI premix water if it is on. The
+    # readout dispense is one column per load, so a disposal volume would buy nothing
+    # and multi_dispense() is called with disposal=0 - hence no waste term.
+    #
+    # THE SLACK TERM IS NOT PADDING. The readout draws milliQ one whole 8-channel load
+    # at a time - READOUT_WATER_UL x 8 = 1080 uL - and an aspirate cannot be split
+    # across two reservoir wells. So each well can only serve floor(its share / 1080)
+    # columns and strands the remainder, and spread()'s even split has no idea. Without
+    # one spare load per well the 10-enzyme + MALDI run dies eleven columns in with
+    # 'milliQ ran out: 1080 uL wanted, 660 uL left' - found by opentrons_simulate,
+    # which is the only thing that would have found it.
+    readout_load = READOUT_WATER_UL * WELLS_PER_COLUMN
+    readout_water_total = (readout_load * nnbt_columns
+                           + readout_load * len(RES_WATER))
 
     buffer_total = (sum(d['buffer_vol'] for d in dilutions)
-                    + SPIKE_VOL_UL * REPLICATES * 2      # NC1 on both NNBT arms
                     + SPIKE_VOL_UL * REPLICATES)         # NC1 on the ABTS plate
     # The ABTS mixes go in by WHOLE COLUMNS, so a part-filled column still costs eight
     # wells of mix. That waste is the price of keeping the kinetic starts together.
@@ -685,6 +874,7 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
         'enz_dils': enz_dils, 'nc3_dil': nc3_dil, 'heat_dil': heat_dil,
         'lac_dils': lac_dils, 'pada_dils': pada_dils, 'nc1_dil': nc1_dil,
         'nnbt': nnbt, 'abts': abts,
+        'readout_water_total': readout_water_total,
         'nnbt_columns': nnbt_columns,
         'abts_columns': abts_columns, 'abts_col_mix': abts_col_mix,
         'per_mix': per_mix, 'buffer_total': buffer_total,
@@ -702,11 +892,21 @@ def p300_loads(n_dests, vol, disposal=P300_MIN):
 
 
 def spread(total_ul, wells, reagent):
-    """Split a reagent evenly over the fewest reservoir wells that hold it."""
-    need = max(1, math.ceil(total_ul / RES_USABLE_UL))
-    if need > len(wells):
-        raise ValueError(f'{reagent} needs {total_ul / 1000:.1f} mL = {need} wells, '
-                         f'but only {len(wells)} are configured.')
+    """Split a reagent evenly over the fewest reservoir wells that hold it.
+
+    EVERY well carries its own RES_DEAD_UL on top of its share, so the test is
+    share + dead <= usable, not total <= usable. Splitting therefore does not halve
+    the requirement - it adds a dead volume. Getting this wrong is how the 10x
+    readout's 13.0 mL of milliQ came out as "one well" and then asked for 14.0 mL to
+    be poured into a well that holds 13.0."""
+    need = 1
+    while (total_ul / need + RES_DEAD_UL > RES_USABLE_UL) and need < len(wells):
+        need += 1
+    if total_ul / need + RES_DEAD_UL > RES_USABLE_UL:
+        raise ValueError(
+            f'{reagent} needs {total_ul / 1000:.1f} mL plus {RES_DEAD_UL / 1000:g} mL '
+            f'dead volume per well, which will not fit {len(wells)} well(s) of '
+            f'{RES_USABLE_UL / 1000:g} mL. Configure another reservoir well.')
     return {w: total_ul / need for w in wells[:need]}
 
 
@@ -731,8 +931,10 @@ def check_deck():
     maldi[SLOT_SWAP] = MALDI_PLATE
     del maldi[SLOT_TIPRACK_300]                   # tips wait off-deck ...
     maldi[SLOT_MALDI_TUBERACK] = TUBERACK         # ... while the matrix rack is on
+    readout = dict(setup)                         # the 10x pass: tube rack gone, the
+    readout[SLOT_SWAP] = READOUT_PLATE            # readout plate in its place
     problems = []
-    for phase, occupied in (('setup', setup), ('MALDI', maldi)):
+    for phase, occupied in (('setup', setup), ('MALDI', maldi), ('readout', readout)):
         for slot, what in occupied.items():
             if slot == '12':
                 continue
@@ -776,8 +978,40 @@ def check_maldi_geometry():
 
 
 check_deck()
+def check_block_budget():
+    """A control block is one column of 8 rows and it has to hold NC2, NC3, every
+    lactaldehyde standard AND whatever enzymes do not fit the 8-row enzyme block.
+    Change LAC_GRADIENT_UM or MAX_ENZYMES without changing the other and the plate
+    silently stops adding up - so it raises at import instead."""
+    spill = max(0, MAX_ENZYMES - WELLS_PER_COLUMN)
+    used = CTRL_FIXED_SLOTS + len(LAC_GRADIENT_UM) + spill
+    if used != WELLS_PER_COLUMN:
+        raise ValueError(
+            f'a control block has {WELLS_PER_COLUMN} rows but the layout wants {used}: '
+            f'{CTRL_FIXED_SLOTS} fixed controls (NC2, NC3) + {len(LAC_GRADIENT_UM)} '
+            f'lactaldehyde standards + {spill} enzyme(s) spilling out of the enzyme '
+            f'block. Add or drop a standard, or change MAX_ENZYMES.')
+
+
+def check_maldi_timepoints():
+    """The timepoints have to be a rising list inside the incubation, and the two
+    columns each one takes have to exist on the target."""
+    t = MALDI_TIMEPOINTS_MIN
+    if not t or list(t) != sorted(set(t)):
+        raise ValueError(f'MALDI_TIMEPOINTS_MIN must be a rising list of distinct '
+                         f'minutes, got {t}.')
+    if t[0] < 0 or t[-1] > INCUBATION_MIN:
+        raise ValueError(f'MALDI_TIMEPOINTS_MIN {t} runs outside the '
+                         f'{INCUBATION_MIN} min incubation.')
+    if MALDI_ARMS * len(t) > MALDI_COLS:
+        raise ValueError(f'{len(t)} timepoints x {MALDI_ARMS} arms needs '
+                         f'{MALDI_ARMS * len(t)} target columns; there are {MALDI_COLS}.')
+
+
 check_mix_geometry()
 check_maldi_geometry()
+check_block_budget()
+check_maldi_timepoints()
 
 
 # Colours for the Opentrons app's labware map. The app shows a coloured, named liquid
@@ -823,11 +1057,13 @@ def colour_of(name):
 SYMBOL = {MIX_NNBT: 'N', MIX_GUA: 'G', MIX_NO_NNBT: 'x', MIX_NO_NNBT_GUA: 'y'}
 
 
-def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
+def render(layout, n_enz, maldi_on=False, maldi_row='A'):
     """Everything you need to set the deck up and read the plates afterwards."""
     out = ['=' * 78,
-           f'  {n_enz} enzymes x 2 arms (plain + guaiacol), 3 negative controls, '
-           f'{len(LAC_GRADIENT_UM)} lactaldehyde standards',
+           f'  {n_enz} enzymes x 2 arms (plain + guaiacol), NC2 + NC3 on the plate '
+           f'(NC1 is ABTS-only), {len(LAC_GRADIENT_UM)} lactaldehyde standards',
+           f'  READ TWICE: the NNBT plate itself, and its {READOUT_FACTOR:g}x dilution '
+           'on the readout plate',
            '  ABTS positive control: ' + ' and '.join(PADA_NAMES) + ' (no ABTS standard)',
            f'  every enzyme diluted to {layout["target"]:.2f} uM',
            '=' * 78, '']
@@ -878,20 +1114,37 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
                    f'{d["buffer_vol"]:>10.1f}  {d["name"]}'
                    f'{"  [" + d["note"] + "]" if d["note"] else ""}')
 
+    # --- the 10x readout plate ---
+    out += ['', '-' * 78,
+            f'  READOUT PLATE (slot {SLOT_SWAP}, swapped in AFTER the incubation)',
+            f'  Use a {READOUT_PLATE} - the SAME type as the NNBT plate. It finishes '
+            'on the Heater-Shaker, whose adapter will not take a Corning flat plate.',
+            f'  Same 96-well map as the NNBT plate, well for well: '
+            f'{READOUT_WATER_UL:g} uL milliQ first, then {READOUT_SAMPLE_UL:g} uL out '
+            f'of the matching NNBT well = {READOUT_FACTOR:g}x.',
+            f'  Purpald: {PURPALD_UNDIL_VOL_UL:g} uL into the NNBT plate (it is down '
+            f'to {REACTION_VOL_UL - READOUT_SAMPLE_UL:g} uL by then), '
+            f'{PURPALD_VOL_UL:g} uL into this one.',
+            '  Both develop on the Heater-Shaker, one after the other. Read A530 twice:',
+            '    "-undiluted"  the NNBT plate   - continuity with earlier runs',
+            f'    "-10x"        this plate      - the standards should be on scale here']
+
     # --- what to pour ---
     needs = {RES_BUFFER: ('assay buffer', layout['buffer_total'])}
     for key, total in layout['per_mix'].items():
         for w, v in spread(total, MIX_RESERVOIR[key], MIX_LABEL[key]).items():
             needs[w] = (MIX_LABEL[key], v)
     for w, v in spread(layout['purpald_total'], RES_PURPALD, 'Purpald').items():
-        needs[w] = ('Purpald reagent', v)
+        needs[w] = ('Purpald reagent (both plates)', v)
     for key, total in layout['abts_per_mix'].items():
         for w, v in spread(total, ABTS_MIX_RESERVOIR[key], ABTS_MIX_LABEL[key]).items():
             needs[w] = (ABTS_MIX_LABEL[key], v)
+    water_total = layout['readout_water_total']
     if maldi_on:
-        rounds = int(INCUBATION_MIN // interval) + 1
-        spots = 2 * maldi_per_arm(n_enz) * rounds
-        needs[RES_WATER] = ('milliQ (MALDI 1:5)', MALDI_WATER_UL * spots)
+        spots = maldi_spot_count(n_enz)
+        water_total += MALDI_WATER_UL * spots
+    for w, v in spread(water_total, RES_WATER, 'milliQ').items():
+        needs[w] = ('milliQ (10x readout' + (' + MALDI)' if maldi_on else ')'), v)
     out += ['', '-' * 78, f'  RESERVOIR (slot {SLOT_RESERVOIR}) - pour these, '
             f'{RES_DEAD_UL / 1000:g} mL dead volume already included']
     for w in sorted(needs, key=lambda x: int(x[1:])):
@@ -918,22 +1171,40 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
 
     # --- MALDI ---
     if maldi_on:
-        rounds = int(INCUBATION_MIN // interval) + 1
+        rows = maldi_rows(layout)
         start = MALDI_ROWS.index(maldi_row)
+        if start + len(rows) > len(MALDI_ROWS):
+            raise ValueError(f'MALDI needs {len(rows)} rows from {maldi_row}; the '
+                             f'target has {len(MALDI_ROWS)}. Start higher up.')
         out += ['', '-' * 78,
-                f'  MALDI - {rounds} rounds every {interval} min, one spot per condition',
+                f'  MALDI - ONE ROW PER SAMPLE, time running across the columns',
+                f'  {len(MALDI_TIMEPOINTS_MIN)} timepoints at t = '
+                + ', '.join(f'{t:g}' for t in MALDI_TIMEPOINTS_MIN) + ' min, '
+                f'{maldi_spot_count(n_enz)} spots in total',
                 f'  premix per spot: {MALDI_WATER_UL:g} uL milliQ + {MALDI_MATRIX_UL:g} '
                 f'uL matrix + {MALDI_SAMPLE_UL:g} uL sample, {MALDI_SPOT_UL:g} uL spotted',
-                '  round   t (min)   plain row   guaiacol row']
-        for r in range(rounds):
-            if start + 2 * r + 1 >= len(MALDI_ROWS):
-                raise ValueError(f'MALDI needs {2 * rounds} rows from {maldi_row}; the '
-                                 f'target has {len(MALDI_ROWS)}. Start higher up or '
-                                 'use a longer interval.')
-            out.append(f'  {r + 1:<7} {r * interval:>7}   '
-                       f'{MALDI_ROWS[start + 2 * r]:<11} {MALDI_ROWS[start + 2 * r + 1]}')
-        out.append(f'  columns 1..{maldi_per_arm(n_enz)}: NC2 heat-inactivated, then '
-                   'the enzymes')
+                '', '  target map (row = sample, column = timepoint x arm)', '']
+        pad, cell = max(len(r) for r in rows) + 2, 7
+        out.append(' ' * (2 + pad)
+                   + ''.join(f't{t:g} min'.center(cell * MALDI_ARMS)
+                             for t in MALDI_TIMEPOINTS_MIN))
+        out.append(' ' * (2 + pad)
+                   + ''.join(('plain' if a == 0 else 'gua').rjust(cell)
+                             for _ in MALDI_TIMEPOINTS_MIN
+                             for a in range(MALDI_ARMS)))
+        for i, label in enumerate(rows):
+            cells = ''.join(
+                '{}{}'.format(*maldi_spot(i, r, a, start)).rjust(cell)
+                for r in range(len(MALDI_TIMEPOINTS_MIN)) for a in range(MALDI_ARMS))
+            out.append(f'  {label:<{pad}}' + cells)
+        out.append('')
+        out += ['  plain = NNBT mix, gua = guaiacol mix. Only NC2 and the enzymes are',
+                '  spotted - NC1 and NC3 add nothing to the mass spectrum.',
+                '',
+                '  The matrix tube is opened and closed ONCE PER SPOTTING SESSION, not',
+                '  once per spot: the matrix tip is dispensed above the water and never',
+                '  touches it, and every premix well holds the same thing at that point,',
+                '  so one tip serves the whole round.']
     return out
 
 
@@ -943,9 +1214,8 @@ def render(layout, n_enz, maldi_on=False, interval=30, maldi_row='A'):
 def run(protocol):
     prm = protocol.params
     n = prm.n_enz
-    rounds = int(INCUBATION_MIN // prm.maldi_interval) + 1 if prm.maldi_on else 0
-    maldi_spots = 2 * maldi_per_arm(n) * rounds
-    # rounds = 1
+    rounds = len(MALDI_TIMEPOINTS_MIN) if prm.maldi_on else 0
+    maldi_spots = maldi_spot_count(n) if prm.maldi_on else 0
 
     # ---- the batch, straight from the app ------------------------------------------
     batch = [{'name': ENZYME_NAMES[i], 'mg_ml': getattr(prm, f'mg_ml_{i + 1}'),
@@ -953,15 +1223,34 @@ def run(protocol):
     heat_um = to_um(prm.heat_mg_ml, prm.heat_mw)
     layout = build_layout(batch, heat_um, prm.target_um, prm.nc3_enz - 1)
 
+    # ---- MALDI fits? check now, not two hours into the incubation -------------------
+    # BEFORE render() and the liquid map, both of which call matrix_plan(), and 'add a
+    # tube to MATRIX_TUBES' is the wrong advice when the real problem is that the run
+    # does not fit the dilution plate or the target at all.
+    if prm.maldi_on:
+        if maldi_spots > MALDI_DIL_WELLS:
+            raise ValueError(
+                f'MALDI needs one premix well per spot = {maldi_spots}, but '
+                f'dilution-plate columns {MALDI_DIL_FIRST_COL}-12 hold '
+                f'{MALDI_DIL_WELLS}. Drop a timepoint from MALDI_TIMEPOINTS_MIN or run '
+                'fewer enzymes.')
+        if MALDI_ROWS.index(prm.maldi_row) + maldi_per_arm(n) > len(MALDI_ROWS):
+            raise ValueError(
+                f'MALDI needs {maldi_per_arm(n)} rows from {prm.maldi_row} (NC2 + '
+                f'{n} enzymes, one row each); the target has {len(MALDI_ROWS)}. '
+                'Start higher up.')
+        matrix_plan(maldi_spots)                       # raises if the tubes are short
+
     for e in layout['enzymes']:                       # the conversion, on the record
         protocol.comment(f'  {e["name"]}: {e["mg_ml"]:g} mg/mL / {e["mw_kda"]:g} kDa '
                          f'= {e["conc"]:.2f} uM')
-    for line in render(layout, n, prm.maldi_on, prm.maldi_interval, prm.maldi_row):
+    for line in render(layout, n, prm.maldi_on, prm.maldi_row):
         protocol.comment(line)
 
     # ---- deck ----------------------------------------------------------------------
     hs = protocol.load_module('heaterShakerModuleV1', HS_SLOT)
-    nnbt_plate = hs.load_adapter(HS_ADAPTER).load_labware(NNBT_PLATE)
+    hs_adapter = hs.load_adapter(HS_ADAPTER)      # kept: the readout plate lands on it
+    nnbt_plate = hs_adapter.load_labware(NNBT_PLATE)
     tuberack = protocol.load_labware(TUBERACK, SLOT_SWAP)
     dil_plate = protocol.load_labware(DILUTION_PLATE, SLOT_DILUTION)
     reservoir = protocol.load_labware(RESERVOIR_LOADNAME, SLOT_RESERVOIR)
@@ -970,6 +1259,8 @@ def run(protocol):
     abts_plate = protocol.load_labware(ABTS_PLATE, protocol_api.OFF_DECK)
     maldi_target = (protocol.load_labware(MALDI_PLATE, protocol_api.OFF_DECK)
                     if prm.maldi_on else None)
+    readout_plate = protocol.load_labware(READOUT_PLATE, protocol_api.OFF_DECK,
+                                          label='10x readout plate')
 
     p20 = protocol.load_instrument('p20_multi_gen2', 'right', tip_racks=[tr20])
     p300 = protocol.load_instrument('p300_multi_gen2', 'left', tip_racks=[tr300])
@@ -1015,10 +1306,12 @@ def run(protocol):
         tag = 'pada_mix' if key == MIX_PADA else 'abts_mix'
         for w, v in spread(total, ABTS_MIX_RESERVOIR[key], ABTS_MIX_LABEL[key]).items():
             res_liquids.append((w, ABTS_MIX_LABEL[key].capitalize(), tag, v))
+    water_total = layout['readout_water_total'] + MALDI_WATER_UL * maldi_spots
+    water_plan = spread(water_total, RES_WATER, 'milliQ')
+    for w, v in water_plan.items():
+        res_liquids.append((w, 'milliQ (10x readout + MALDI)', 'water', v))
     if prm.maldi_on:
-        spots = 2 * maldi_per_arm(n) * rounds
-        res_liquids.append((RES_WATER, 'milliQ (MALDI 1:5)', 'water',
-                            MALDI_WATER_UL * spots))
+        spots = maldi_spots
         for tube, vol in matrix_plan(spots):
             tuberack[tube].load_liquid(liquid('MALDI matrix - CAPPED tube',
                                               COLOUR['matrix']), vol + MATRIX_TUBE_DEAD_UL)
@@ -1049,9 +1342,27 @@ def run(protocol):
             protocol.pause(f'{key} uL tips used up. Put a FULL rack in slot {slot} '
                            'and resume.')
             nxt[key] = 0
+            pip.reset_tipracks()                      # else the API still calls them used
         well = racks[key][nxt[key]]                   # row A when count == 8
         nxt[key] += count
         pip.pick_up_tip(well)
+
+    # milliQ is the one reagent two different steps draw from, so the wells are
+    # emptied in order through a single tracker rather than each step assuming a well.
+    water_wells = sorted(water_plan, key=lambda w: int(w[1:]))
+    water_left = dict(water_plan)
+
+    def water_src(load):
+        """A reservoir well with at least `load` uL of milliQ left in it. `load` is
+        what the PIPETTE draws - 8 nozzles x the per-well volume for a column pass."""
+        for w in water_wells:
+            if water_left[w] >= load:
+                water_left[w] -= load
+                return reservoir[w]
+        raise ValueError(
+            f'milliQ ran out: {load:.0f} uL wanted, '
+            f'{max(water_left.values()):.0f} uL left in the fullest of '
+            f'{", ".join(water_wells)}. build_layout() and spread() are out of step.')
 
     def slow():
         """Gentle p20: droplets on the MALDI target, and acetonitrile matrix."""
@@ -1072,38 +1383,30 @@ def run(protocol):
         take('300', p300, SLOT_TIPRACK_300, WELLS_PER_COLUMN)
 
     # ---- tip budget: warn BEFORE the run rather than stalling mid-incubation --------
-    per_arm = maldi_per_arm(n)                        # NC2 + the enzymes
-    maldi_tips = rounds * (1 + 2 * 2 * per_arm)   # water tip per round; matrix and
-                                                  # sample tip per spot
+    # Per round: one water tip, one matrix tip (it serves the whole round - see the
+    # spotting loop), and one sample tip per spot.
+    maldi_tips = rounds * (2 + MALDI_ARMS * maldi_per_arm(n))
     spike_cols = 2 if n else 1            # NNBT only: col 1, and col 2 if there are any
     abts_tips = len(layout['abts'])       # ABTS is single-nozzle: one tip per sample
+    # The 10x readout is NOT in this number: it runs one fresh tip column per plate
+    # column, which is a whole 96-tip rack on its own, and step 12 makes the operator
+    # put a new rack in before it starts. Everything below has to fit the rack they
+    # loaded at setup.
     tips20 = (len(layout['dilutions']) + spike_cols * WELLS_PER_COLUMN + abts_tips
               + maldi_tips + WELLS_PER_COLUMN)   # slack: pick20_column skips part-used
     have20 = len(racks['20']) - start['20']
-    protocol.comment(f'  20 uL tips needed ~{tips20}, available from '
-                     f'{prm.tip20_row}{prm.tip20_col}: {have20}')
+    mid_run_racks = max(0, math.ceil((tips20 - have20) / len(racks['20'])))
+    total_racks = 1 + mid_run_racks + 1            # loaded now, mid-run, then the 10x
+    protocol.comment(f'  20 uL tips needed ~{tips20} before the 10x readout, available '
+                     f'from {prm.tip20_row}{prm.tip20_col}: {have20}')
+    protocol.comment(f'  *** HAVE {total_racks} FULL 20 uL RACKS READY: the one in slot '
+                     f'{SLOT_TIPRACK_20} now, {mid_run_racks} more during the run, and '
+                     'one at step 12 - the 10x readout spends a whole rack on its own, '
+                     'one tip column per plate column. ***')
     if tips20 > have20:
-        protocol.comment(f'  *** NOT ENOUGH 20 uL TIPS: have {have20}, need ~{tips20}. '
-                         f'The run will PAUSE for a fresh rack {math.ceil((tips20 - have20) / 96)} '
-                         'time(s) - have them open and ready. ***')
-
-    # ---- MALDI fits? check now, not two hours into the incubation -------------------
-    if prm.maldi_on:
-        per_round = 2 * maldi_per_arm(n)               # both arms, NC2 + n enzymes
-        if per_round * rounds > MALDI_DIL_WELLS:
-            fit = MALDI_DIL_WELLS // per_round          # most rounds that fit
-            hint = (f'a longer interval (>= {math.ceil(INCUBATION_MIN / (fit - 1))} min)'
-                    if fit > 1 else 'one round only')
-            raise ValueError(
-                f'MALDI needs {per_round} dilution wells per round x {rounds} rounds = '
-                f'{per_round * rounds}, but dilution-plate columns '
-                f'{MALDI_DIL_FIRST_COL}-12 hold {MALDI_DIL_WELLS}. Use {hint} or fewer '
-                'enzymes.')
-        if MALDI_ROWS.index(prm.maldi_row) + 2 * rounds > len(MALDI_ROWS):
-            raise ValueError(
-                f'MALDI needs {2 * rounds} rows from {prm.maldi_row}; the target has '
-                f'{len(MALDI_ROWS)}. Start higher up or use a longer interval.')
-        matrix_plan(maldi_spots)                       # raises if the tubes are short
+        protocol.comment(f'  *** NOT ENOUGH 20 uL TIPS FOR THE RUN UP TO STEP 12: have '
+                         f'{have20}, need ~{tips20}. It will PAUSE for a fresh rack '
+                         f'{mid_run_racks} time(s) - have them open. ***')
 
     # ---- small helpers --------------------------------------------------------------
     def area(well):
@@ -1432,7 +1735,7 @@ def run(protocol):
                    f'{INCUBATION_TEMP_C} degC, then resume.')
 
     # ===================================================================================
-    # 11  incubate, pausing every interval to spot the MALDI target
+    # 11  incubate, pausing at each MALDI timepoint to spot the target
     # ===================================================================================
     hs.set_and_wait_for_temperature(INCUBATION_TEMP_C)
     if not prm.maldi_on:
@@ -1440,28 +1743,33 @@ def run(protocol):
         protocol.delay(minutes=INCUBATION_MIN)
         hs.deactivate_shaker()
     else:
-        # One MALDI condition = one NNBT well, premixed with milliQ and matrix, one spot.
-        # The plain arm goes on one row, the guaiacol arm on the next. Only NC2 (the
-        # heat-inactivated control) and the enzymes are spotted - see maldi_per_arm().
+        # One MALDI condition = one NNBT well, premixed with milliQ and matrix, one
+        # spot. ONE TARGET ROW PER SAMPLE and time running across the columns - see
+        # maldi_spot(). Only NC2 (the heat-inactivated control) and the enzymes are
+        # spotted; NC1 and NC3 add nothing to the mass spectrum.
         start_row = MALDI_ROWS.index(prm.maldi_row)
         spotted = ([layout['heat_dil']['well']]
                    + [d['well'] for d in layout['enz_dils']])
-        conds = [(g['label'], g['arm'], g['wells'][0])          # sample replicate 1 only
-                 for g in layout['nnbt'] if g['src'][1] in spotted]
+        # Sorted by that list, NOT by plate order: enzymes 9-10 live in the control
+        # block, so plate order would spot them between NC2 and enzyme 1. The spot key
+        # is NC2, then the enzymes in enzyme-number order, on both arms.
+        rank = {w: i for i, w in enumerate(spotted)}
+        conds = [(g['label'], g['arm'], g['wells'][0], rank[g['src'][1]])
+                 for g in layout['nnbt'] if g['src'][1] in spotted]  # replicate 1 only
         if len(conds) != 2 * maldi_per_arm(n):
             raise ValueError(f'MALDI picked {len(conds)} conditions, expected '
                              f'{2 * maldi_per_arm(n)} - maldi_per_arm() is out of step.')
-        plain = [c for c in conds if c[1] == ARM_PLAIN]
-        gua = [c for c in conds if c[1] == ARM_GUA]
+        plain = sorted((c for c in conds if c[1] == ARM_PLAIN), key=lambda c: c[3])
+        gua = sorted((c for c in conds if c[1] == ARM_GUA), key=lambda c: c[3])
         dil_i = [0]                     # running index into dilution-plate col 4 on
         maldi_offset = (MALDI_DIL_FIRST_COL - 1) * WELLS_PER_COLUMN
 
         def next_maldi_well():
             if dil_i[0] >= MALDI_DIL_WELLS:
-                raise ValueError('the MALDI dilution columns are full: '
-                                 f'{2 * len(plain)} wells per round x {rounds} rounds '
-                                 f'> {MALDI_DIL_WELLS}. Use a longer interval or fewer '
-                                 'enzymes.')
+                raise ValueError('the MALDI premix wells are full: '
+                                 f'{maldi_spots} spots > {MALDI_DIL_WELLS} wells in '
+                                 f'dilution columns {MALDI_DIL_FIRST_COL}-12. Drop a '
+                                 'timepoint or run fewer enzymes.')
             w = _dil(maldi_offset + dil_i[0])
             dil_i[0] += 1
             return w
@@ -1471,55 +1779,77 @@ def run(protocol):
         matrix_draws = [t for t, v in plan for _ in range(round(v / MALDI_MATRIX_UL))]
         matrix_left = {t: v + MATRIX_TUBE_DEAD_UL for t, v in plan}
 
-        for r in range(rounds):
-            if r:
+        elapsed = 0.0                              # minutes of incubation done
+        for r, t_min in enumerate(MALDI_TIMEPOINTS_MIN):
+            if t_min > elapsed:                    # shake up to this timepoint
                 hs.set_and_wait_for_shake_speed(INCUBATION_RPM)
-                protocol.delay(minutes=prm.maldi_interval)
+                protocol.delay(minutes=t_min - elapsed)
                 hs.deactivate_shaker()                 # never pipette a moving plate
-            protocol.pause(f'MALDI round {r + 1}/{rounds} (t = {r * prm.maldi_interval} '
-                           'min): UNSEAL the NNBT plate, then resume.')
+                elapsed = t_min
+            protocol.pause(f'MALDI round {r + 1}/{rounds} (t = {t_min:g} min): '
+                           'UNSEAL the NNBT plate, then resume.')
+            # A ROW PER SAMPLE, so the row index is the SAMPLE and the column is this
+            # timepoint's pair of arms.
             todo = []                                  # (spot, NNBT well, premix well)
             for arm_i, arm in enumerate((plain, gua)):
-                row = MALDI_ROWS[start_row + 2 * r + arm_i]
-                for j, (_, _, src_well) in enumerate(arm):
-                    todo.append((maldi_target[f'{row}{j + 1}'], src_well,
+                for i, (_, _, src_well, _) in enumerate(arm):
+                    row, col = maldi_spot(i, r, arm_i, start_row)
+                    todo.append((maldi_target[f'{row}{col}'], src_well,
                                  dil_plate[next_maldi_well()]))
 
             # WATER into every premix well of the round, ONE tip: the wells are empty,
             # so this tip only ever touches water and may go back to the reservoir.
             pick20()
             for _, _, well in todo:
-                p20.aspirate(MALDI_WATER_UL, reservoir[RES_WATER])
+                p20.aspirate(MALDI_WATER_UL, water_src(MALDI_WATER_UL))
                 p20.dispense(MALDI_WATER_UL, well.bottom(z=DILUTION_HEIGHT_MM))
                 clear(p20, well)
             p20.drop_tip()
 
-            for spot, src_well, well in todo:
-                # MATRIX: its own tip, dropped straight after. It is dispensed ABOVE the
-                # water, so nothing from a premix well ever gets back into the tube.
+            # MATRIX into every premix well of the round, ONE TIP AND ONE OPEN/CLOSE
+            # PER SPOTTING SESSION - not per spot. It is safe for the same reason the
+            # water pass is: the matrix is dispensed MALDI_MATRIX_DISPENSE_MM ABOVE the
+            # water and never touches it, and at this moment every premix well holds
+            # exactly the same thing - water and matrix, no sample yet, which only goes
+            # in below on a clean tip. So there is nothing to cross-contaminate.
+            # NO touch_tip on a premix well here, unlike everywhere else: 25 uL creeps
+            # up the wall of a flat 6.9 mm well, and this tip goes straight back into
+            # the matrix tube. A wet wall would carry water into the acetonitrile and
+            # dilute the stock over the round's draws. Blow out above the liquid only.
+            pick20()
+            slow()                                     # acetonitrile drips at speed
+            open_tube, prewet = None, True
+            for _, _, well in todo:
                 tube = matrix_draws.pop(0)
-                protocol.pause(f'OPEN matrix tube {tube} (slot {SLOT_MALDI_TUBERACK}) '
-                               f'for spot {spot.well_name}, then resume.')
-                pick20()
-                slow()                                 # acetonitrile drips at speed
+                if tube != open_tube:                  # only when the tube CHANGES
+                    if open_tube is not None:
+                        protocol.pause(f'CLOSE matrix tube {open_tube}, then resume.')
+                    protocol.pause(
+                        f'OPEN matrix tube {tube} (slot {SLOT_MALDI_TUBERACK}) for the '
+                        f'whole of MALDI round {r + 1}, then resume.')
+                    open_tube, prewet = tube, True
                 # 25 uL does not fit a 20 uL tip: 20 + 5, both while the tube is open.
                 done = 0.0
                 while done < MALDI_MATRIX_UL - 1e-6:
                     stroke = min(MALDI_MATRIX_UL - done, P20_MAX)
                     src = draw_at(tuberack[tube], matrix_left[tube], stroke)
-                    if not done:                       # pre-wet, first stroke only
+                    if prewet:              # saturate the tip with acetonitrile vapour
                         p20.mix(MALDI_MATRIX_PREWET_REPS, stroke, src)
+                        prewet = False      # once per tube now, not once per spot
                     p20.aspirate(stroke, src)
                     matrix_left[tube] -= stroke
                     protocol.delay(seconds=MALDI_MATRIX_DELAY_S)
                     touch(p20, tuberack[tube])         # drop falls back into the tube
                     p20.dispense(stroke, well.bottom(z=MALDI_MATRIX_DISPENSE_MM))
                     done += stroke
-                    clear(p20, well, over=MALDI_WATER_UL + done)
-                fast()
-                p20.drop_tip()
-                protocol.pause(f'CLOSE matrix tube {tube}, then resume.')
+                    if BLOW_OUT:
+                        z = height(well, MALDI_WATER_UL + done) + BLOWOUT_ABOVE_MM
+                        p20.blow_out(well.bottom(z=min(z, well.depth - 1.0)))
+            fast()
+            p20.drop_tip()
+            protocol.pause(f'CLOSE matrix tube {open_tube}, then resume.')
 
+            for spot, src_well, well in todo:
                 # SAMPLE: a clean tip into the NNBT well, premix, spot 2 uL, spread it.
                 pick20()
                 premix = well.bottom(z=MALDI_PREMIX_TIP_MM)
@@ -1538,10 +1868,9 @@ def run(protocol):
                 fast()
                 p20.drop_tip()
             protocol.pause('RESEAL the NNBT plate, then resume.')
-        leftover = INCUBATION_MIN - (rounds - 1) * prm.maldi_interval
-        if leftover > 0:
+        if INCUBATION_MIN > elapsed:               # tail of the incubation, if any
             hs.set_and_wait_for_shake_speed(INCUBATION_RPM)
-            protocol.delay(minutes=leftover)
+            protocol.delay(minutes=INCUBATION_MIN - elapsed)
             hs.deactivate_shaker()
         protocol.pause(f'Take the MALDI target from slot {SLOT_SWAP} and let the spots '
                        'dry - the matrix is already in them. Spot key is in this log. '
@@ -1552,22 +1881,112 @@ def run(protocol):
         protocol.move_labware(tr300, SLOT_TIPRACK_300, use_gripper=False)
 
     # ===================================================================================
-    # 12  Purpald, develop, hand off
+    # 12  the 10x readout plate goes on, and the 20 uL rack is replaced
     # ===================================================================================
-    protocol.pause('Remove the seal from the NNBT plate, then resume for Purpald.')
+    cols = [f'A{c}' for c in range(1, layout['nnbt_columns'] + 1)]
+    protocol.pause(
+        'Remove the seal from the NNBT plate. Put an EMPTY 96-well plate in slot '
+        f'{SLOT_SWAP} (the 10x readout plate) and a FRESH 20 uL tip rack in slot '
+        f'{SLOT_TIPRACK_20} - the 10x pass uses a whole rack, one column per plate '
+        'column. Then resume.')
+    protocol.move_labware(readout_plate, SLOT_SWAP, use_gripper=False)
+    nxt['20'] = 0                                 # the operator just put a full rack in
+    p20.reset_tipracks()                          # ... and the API has to be told
+
+    # ===================================================================================
+    # 13  135 uL milliQ, then 15 uL of every reaction on top of it
+    # ===================================================================================
+    # WATER FIRST, SAMPLE INTO IT. Dispensing 15 uL into standing water mixes far better
+    # than dropping water onto 15 uL, and it rinses the tip on the way out.
+    # 8-channel, one column per aspirate: 135 uL x 8 = 1080 uL leaves the reservoir per
+    # load, which is what water_src() is charged. disposal=0 on purpose - one
+    # destination per load means a disposal volume would be pure waste, and the full
+    # blow-out it replaces is the more accurate ending anyway.
+    pick300_column()
+    for a in cols:
+        p300.aspirate(READOUT_WATER_UL,
+                      water_src(READOUT_WATER_UL * WELLS_PER_COLUMN))
+        p300.dispense(READOUT_WATER_UL,
+                      readout_plate[a].bottom(z=DILUTION_HEIGHT_MM))
+        clear(p300, readout_plate[a], over=READOUT_WATER_UL)
+    p300.drop_tip()
+
+    # A FRESH TIP COLUMN PER PLATE COLUMN. These are 96 different samples; one carried
+    # tip would cross-contaminate a whole row of the readout.
+    p20.configure_nozzle_layout(style=ALL, tip_racks=[tr20])
+    for a in cols:
+        pick20_column()
+        p20.aspirate(READOUT_SAMPLE_UL, nnbt_plate[a].bottom(z=READOUT_DRAW_MM))
+        touch(p20, nnbt_plate[a])                 # drop falls back into the reaction
+        p20.dispense(READOUT_SAMPLE_UL,
+                     readout_plate[a].bottom(z=READOUT_DISPENSE_MM))
+        # These strokes do NOT homogenise the well - 20 uL cannot stir 150. They break
+        # the 15 uL up so it is not a discrete layer; the shake in step 16 is what
+        # actually mixes it.
+        p20.mix(READOUT_MIX_REPS, READOUT_MIX_UL,
+                mix_at(readout_plate[a], READOUT_VOL_UL, READOUT_MIX_UL))
+        clear(p20, readout_plate[a], over=READOUT_VOL_UL)
+        p20.drop_tip()
+    p20.configure_nozzle_layout(style=SINGLE, start='H1', tip_racks=[tr20])
+
+    # ===================================================================================
+    # 14  Purpald into the UNDILUTED plate, and develop it - this one first
+    # ===================================================================================
+    # ORDER MATTERS. The NNBT plate still holds active enzyme at full NNBT concentration
+    # and is still making lactaldehyde; the readout plate is already running ten times
+    # slower. Purpald's NaOH is the quench, so it goes to the plate that needs quenching.
     pur = list(spread(layout['purpald_total'], RES_PURPALD, 'Purpald'))[0]
     pick300_column()
-    multi_dispense(p300, PURPALD_VOL_UL, reservoir[pur],          # 5 columns per load
-                   [nnbt_plate[f'A{c}'] for c in range(1, layout['nnbt_columns'] + 1)])
+    multi_dispense(p300, PURPALD_UNDIL_VOL_UL, reservoir[pur],   # several cols per load
+                   [nnbt_plate[a] for a in cols])
     p300.drop_tip()
 
     hs.set_and_wait_for_temperature(DEVELOP_TEMP_C)
     hs.set_and_wait_for_shake_speed(DEVELOP_RPM)
     protocol.delay(minutes=DEVELOP_MIN)
     hs.deactivate_shaker()
+
+    # ===================================================================================
+    # 15  swap the plates on the Heater-Shaker
+    # ===================================================================================
+    # Both plates develop ON the shaker, one after the other, because the purple step is
+    # an O2 oxidation and 1000 rpm is how O2 gets back into a 200 uL well. Developing one
+    # of them static in slot 5 would not be the same assay.
+    hs.open_labware_latch()
+    protocol.pause(
+        'READ THE UNDILUTED PLATE NOW: take it off the Heater-Shaker to the reader '
+        '(A530) and save it as "-undiluted". Then put the 10x readout plate from slot '
+        f'{SLOT_SWAP} onto the Heater-Shaker and resume.')
+    protocol.move_labware(nnbt_plate, protocol_api.OFF_DECK, use_gripper=False)
+    protocol.move_labware(readout_plate, hs_adapter, use_gripper=False)
+    hs.close_labware_latch()
+
+    # ===================================================================================
+    # 16/17  mix the 10x plate, Purpald, develop
+    # ===================================================================================
+    # THE MIX THAT COUNTS. 15 uL under 135 uL does not mix itself: diffusion moves a
+    # small molecule about 0.9 mm in the ~12 min this plate has been standing, and the
+    # liquid column is ~4 mm. If Purpald met a concentrated bolus it would brown it, and
+    # brown does not come back - which is exactly what happened to the standards above
+    # 500 uM on 2026-09-15.
+    hs.set_and_wait_for_temperature(DEVELOP_TEMP_C)
+    hs.set_and_wait_for_shake_speed(READOUT_MIX_RPM)
+    protocol.delay(minutes=READOUT_MIX_MIN)
+    hs.deactivate_shaker()                        # never pipette a moving plate
+
+    pick300_column()
+    multi_dispense(p300, PURPALD_VOL_UL, reservoir[pur],
+                   [readout_plate[a] for a in cols])
+    p300.drop_tip()
+
+    hs.set_and_wait_for_shake_speed(DEVELOP_RPM)
+    protocol.delay(minutes=DEVELOP_MIN)
+    hs.deactivate_shaker()
     hs.deactivate_heater()
     hs.open_labware_latch()
-    protocol.comment('Done - read A530. Plate maps are at the top of this log.')
+    protocol.comment(f'Done - read the 10x plate at A530 and save it as "-10x". The '
+                     'undiluted plate was read in step 15. Plate maps, which are the '
+                     'same for both, are at the top of this log.')
 
 
 # =======================================================================================
@@ -1578,4 +1997,4 @@ if __name__ == '__main__':
             {'name': 'Lac-02', 'mg_ml': 1.85, 'mw_kda': 65.0},
             {'name': 'Lac-03', 'mg_ml': 3.10, 'mw_kda': 70.0}]
     print('\n'.join(render(build_layout(demo, to_um(2.40, 65.0)),
-                           len(demo), True, 30, 'A')))
+                           len(demo), True, 'A')))

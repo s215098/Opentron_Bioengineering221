@@ -1,0 +1,6 @@
+# Plate-reader exports and other raw instrument data - not version controlled
+Results/
+
+__pycache__/
+*.pyc
+.DS_Store
