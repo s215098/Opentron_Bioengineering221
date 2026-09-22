@@ -274,12 +274,15 @@ MALDI_FLOW_UL_S = 7.6                  # spotting only. A 1 uL droplet placed on
 # PREMIX. Matrix is NOT spotted on its own any more: each premix well gets
 #   20 uL milliQ + 25 uL matrix + 5 uL sample = 50 uL, and 2 uL of that is spotted.
 # That is the same 1:1 sample:matrix spot the old 1 uL matrix + 1 uL sample made on
-# the target, just mixed in a well. It fixes two failures seen on the robot:
+# the target, just mixed in a well. It fixes three failures seen on the robot:
 #   - 1 uL of acetonitrile matrix (the p20 minimum) was often not picked up or not
 #     dispensed. Acetonitrile vapour in a dry tip pushes a 1 uL plug straight out.
 #     25 uL, a pre-wetted tip, a slow aspirate and a pause fix that.
 #   - 25 uL on a 6.9 mm FLAT floor is ~0.7 mm deep and creeps to the wall, leaving the
 #     centre - where the tip is - dry. 50 uL with acetonitrile in it wets the floor.
+#   - the 2 uL spot draw itself came up EMPTY: the tip mixed, arced up out of the well
+#     and back down, and aspirated air. See MALDI_PREMIX_TIP_MM and the spotting loop -
+#     the tip now goes deeper and never leaves the liquid between the mix and the draw.
 MALDI_SAMPLE_UL = 5.0
 MALDI_WATER_UL = 20.0
 MALDI_MATRIX_UL = 25.0                 # from a capped tube, see MATRIX_TUBES;
@@ -289,12 +292,32 @@ MALDI_MATRIX_PREWET_REPS = 2           # saturate the tip with acetonitrile vapo
 MALDI_MATRIX_DELAY_S = 1.0             # after the matrix aspirate, before moving
 MALDI_MATRIX_DISPENSE_MM = 3.0         # above the water in the premix well: the matrix
                                        # tip never touches liquid it could carry back
-MALDI_PREMIX_TIP_MM = 0.8              # mix and draw height in the 50 uL premix well
+# HOW DEEP THE TIP GOES IN THE PREMIX WELL. 50 uL on a 6.86 mm flat floor is only
+# 1.35 mm deep, so this number is almost all of the submersion there is. It used to be
+# 0.8 mm, which left 0.34 mm under the tip at the bottom of a mix stroke - inside the
+# stack of labware-offset error (+-0.3 mm is normal), the concave meniscus an
+# acetonitrile mix pulls in the CENTRE of the well (where the tip is), and the
+# acetonitrile that boils off while the well waits its turn. The tip came back up dry
+# and spotted nothing. 0.5 mm is still 5x the p20 orifice bore, so it cannot seal on
+# the floor, and it doubles the margin. check_maldi_geometry() enforces both ends.
+MALDI_PREMIX_TIP_MM = 0.5              # mix and draw height in the 50 uL premix well
+MALDI_PREMIX_MIN_TIP_MM = 0.3          # below this a p20 tip starts to seal on a flat
+                                       # floor and moves nothing
+# Water and matrix go into EVERY premix well of a round before the first sample does,
+# so the last well of a round sits open for ~15 min with 25 uL of acetonitrile in it.
+# It loses roughly 0.5-1 uL/min. The geometry check below must pass for a well that has
+# already lost this much, not for a full one.
+MALDI_PREMIX_EVAP_UL = 10.0
 MALDI_PREMIX_MIX_REPS = 5
 MALDI_PREMIX_MIX_UL = 8.0              # a bigger stroke drops the surface below the tip
                                        # - check_maldi_geometry() enforces it
 MALDI_SPOT_UL = 2.0                    # premix per spot
 MALDI_SPOT_SURPLUS_UL = 1.0            # drawn extra, never dispensed: no air on steel
+MALDI_SPOT_DRAW_DELAY_S = 1.0          # hold the tip still under the surface after the
+                                       # spot draw: 3 uL of a half-acetonitrile mix does
+                                       # not finish entering the tip the instant the
+                                       # plunger stops, and lifting early leaves it in
+                                       # the well
 MALDI_MIX_REPS = 3                     # aspirate/dispense on the target spreads the drop
 MALDI_MIX_UL = 1.0                     # the p20's minimum, half the 2 uL spot
 MALDI_SPOT_HEIGHT_MM = 0.3             # from the WELL BOTTOM, and the well is only
@@ -782,15 +805,26 @@ def check_mix_geometry():
 def check_maldi_geometry():
     """The premix well is shallow. The p20 has to stay under the surface at the bottom
     of every mix stroke and after the spot draw - that is where it pooled at the wall
-    and came up dry."""
+    and came up dry.
+
+    Checked against the WORST well of a round, not a fresh one: MALDI_PREMIX_EVAP_UL of
+    acetonitrile is already gone by the time the last well is sampled."""
+    if MALDI_PREMIX_TIP_MM < MALDI_PREMIX_MIN_TIP_MM:
+        raise ValueError(f'MALDI premix tip at {MALDI_PREMIX_TIP_MM:g} mm above a FLAT '
+                         f'floor - a p20 tip seals below ~{MALDI_PREMIX_MIN_TIP_MM:g} mm '
+                         'and moves nothing.')
     area = math.pi * (6.86 / 2) ** 2
-    for what, left in (('premix mix stroke', MALDI_PREMIX_UL - MALDI_PREMIX_MIX_UL),
-                       ('spot draw', MALDI_PREMIX_UL - MALDI_SPOT_UL
-                        - MALDI_SPOT_SURPLUS_UL)):
+    full = MALDI_PREMIX_UL - MALDI_PREMIX_EVAP_UL
+    for what, left in (('premix mix stroke', full - MALDI_PREMIX_MIX_UL),
+                       ('spot draw', full - MALDI_SPOT_UL - MALDI_SPOT_SURPLUS_UL)):
         surface = left / area
         if MALDI_PREMIX_TIP_MM > surface - ASPIRATE_MARGIN_MM:
-            raise ValueError(f'MALDI {what}: surface at {surface:.2f} mm, tip at '
-                             f'{MALDI_PREMIX_TIP_MM:g} mm - it would draw AIR.')
+            raise ValueError(
+                f'MALDI {what}: a well that has lost {MALDI_PREMIX_EVAP_UL:g} uL to '
+                f'evaporation holds {left:.1f} uL, surface at {surface:.2f} mm, tip at '
+                f'{MALDI_PREMIX_TIP_MM:g} mm - it would draw AIR. Lower '
+                'MALDI_PREMIX_TIP_MM, shrink MALDI_PREMIX_MIX_UL, or raise the premix '
+                'volume.')
 
 
 check_deck()
@@ -1544,9 +1578,17 @@ def run(protocol):
                 p20.aspirate(MALDI_SAMPLE_UL,
                              nnbt_plate[src_well].bottom(z=MALDI_DRAW_HEIGHT_MM))
                 p20.dispense(MALDI_SAMPLE_UL, premix)
-                p20.mix(MALDI_PREMIX_MIX_REPS, MALDI_PREMIX_MIX_UL, premix)
+                # NO LOCATION on the mix or on the spot draw, deliberately. Passing one
+                # makes the API arc the tip up to the top of the well and back down
+                # between every command, and each of those exits drags premix out on the
+                # tip, disturbs the shallow pool and gives the re-entry another chance to
+                # land above the liquid - the tip came back down and aspirated nothing.
+                # Without a location both act where the tip already is: under the
+                # surface, from the dispense right through to the draw.
+                p20.mix(MALDI_PREMIX_MIX_REPS, MALDI_PREMIX_MIX_UL)
                 slow()                                 # from here the tip is on steel
-                p20.aspirate(MALDI_SPOT_UL + MALDI_SPOT_SURPLUS_UL, premix)
+                p20.aspirate(MALDI_SPOT_UL + MALDI_SPOT_SURPLUS_UL)
+                protocol.delay(seconds=MALDI_SPOT_DRAW_DELAY_S)   # let it finish
                 # NO blow-out, NO touch-tip, NO air gap on the target: air pushed
                 # through the droplet sprays it onto neighbouring spots and leaves a
                 # bubble, which is a hole in the crystal layer.
