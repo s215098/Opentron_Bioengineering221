@@ -702,7 +702,7 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
 
     def add_dil(well, name, kind, address, stock_conc, fill, note='', conc_to=None):
         """stock_conc None = a buffer-only well (NC1, and the fillers)."""
-                conc = None
+        conc = None
         if stock_conc is None:
             stock, buf = 0.0, fill
         elif conc_to is None and stock_conc < target:
@@ -1296,7 +1296,7 @@ def run(protocol):
                          f'= {e["conc"]:.2f} uM')
     for line in render(layout, n, prm.maldi_on, prm.maldi_row):
         protocol.comment(line)
-     if layout['warnings']:                          # make the operator see it
+    if layout['warnings']:                          # make the operator see it
         protocol.pause('WARNING: ' + ' | '.join(layout['warnings'])
                        + '  -  Resume to run anyway.')
     # ---- deck ----------------------------------------------------------------------
