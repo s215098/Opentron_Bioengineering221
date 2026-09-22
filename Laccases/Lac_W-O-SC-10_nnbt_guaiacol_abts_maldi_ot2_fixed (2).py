@@ -697,17 +697,30 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
     # 8-channel pass touches column 1 after the ABTS spikes have pulled that well below
     # its neighbours - see step 7 in run().
     dilutions = []
+    warnings = []                                     # samples that went in neat
     V_MAIN, V_PADA = DILUTION_WELL_VOL_UL, PADA_FILL_UL
 
     def add_dil(well, name, kind, address, stock_conc, fill, note='', conc_to=None):
         """stock_conc None = a buffer-only well (NC1, and the fillers)."""
+                conc = None
         if stock_conc is None:
             stock, buf = 0.0, fill
+        elif conc_to is None and stock_conc < target:
+            # TOO DILUTE FOR THE TARGET: go in NEAT instead of refusing to build. Only
+            # samples take this path (conc_to None) - a lactaldehyde standard that
+            # missed its concentration would corrupt the curve, so those still raise.
+            stock, buf, conc = fill, 0.0, stock_conc
+            warnings.append(
+                f'{name} (tube {address}) is only {stock_conc:.3g} uM, below the '
+                f'{target:.3g} uM target - dispensed NEAT at {stock_conc:.3g} uM '
+                f'({stock_conc / target:.0%} of target). Normalise its rates by hand.')
+            note = (note + '; ' if note else '') + f'NEAT - {stock_conc:.3g} uM, not target'
         else:
             stock, buf = dilution_recipe(stock_conc, conc_to or target, total=fill)
+            conc = conc_to or target
         d = {'name': name, 'well': well, 'src_kind': kind, 'src': address,
              'stock_conc': stock_conc or 0.0, 'stock_vol': stock, 'buffer_vol': buf,
-             'fill': fill, 'note': note}
+             'fill': fill, 'note': note, 'conc': conc}
         dilutions.append(d)
         return d
 
@@ -903,6 +916,7 @@ def build_layout(enzymes, heat_um, target_um=None, nc3_index=0):
         'per_mix': per_mix, 'buffer_total': buffer_total,
         'purpald_total': purpald_total,
         'abts_per_mix': abts_per_mix,
+        'warnings': warnings,
     }
 
 
@@ -1101,7 +1115,9 @@ def render(layout, n_enz, maldi_on=False, maldi_row='A'):
            '  ABTS positive control: ' + ' and '.join(PADA_NAMES) + ' (no ABTS standard)',
            f'  every enzyme diluted to {layout["target"]:.2f} uM',
            '=' * 78, '']
-
+    if layout.get('warnings'):
+        out += ['!' * 78, '  WARNING - NOT EVERY SAMPLE IS AT THE TARGET CONCENTRATION'] \
+               + [f'  - {w}' for w in layout['warnings']] + ['!' * 78, '']
     # --- NNBT plate map ---
     pos = {w: i + 1 for i, g in enumerate(layout['nnbt']) for w in g['wells']}
     mix = {w: g['mix'] for g in layout['nnbt'] for w in g['wells']}
@@ -1280,7 +1296,9 @@ def run(protocol):
                          f'= {e["conc"]:.2f} uM')
     for line in render(layout, n, prm.maldi_on, prm.maldi_row):
         protocol.comment(line)
-
+     if layout['warnings']:                          # make the operator see it
+        protocol.pause('WARNING: ' + ' | '.join(layout['warnings'])
+                       + '  -  Resume to run anyway.')
     # ---- deck ----------------------------------------------------------------------
     hs = protocol.load_module('heaterShakerModuleV1', HS_SLOT)
     hs_adapter = hs.load_adapter(HS_ADAPTER)      # kept: the readout plate lands on it
